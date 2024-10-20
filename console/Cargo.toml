@@ -1,0 +1,9 @@
+﻿[package]
+name = "console"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+env = { path = "../env" }
+ai = { path = "../ai" }
+crossterm = "0.27.0"

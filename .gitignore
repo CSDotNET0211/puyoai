@@ -1,0 +1,6 @@
+/target
+/.idea
+/.cargo
+/genes
+/log.txt
+.test.json

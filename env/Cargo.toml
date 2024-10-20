@@ -1,0 +1,15 @@
+[package]
+name = "env"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = "0.8.5"
+log = "0.4.22"
+candle-core = "0.6.0"
+candle-nn = "0.6.0"
+anyhow = "1.0.75"
+evolutionary = "0.1.1"
+rusty-machine = "0.5.4"
+strum = { version = "0.26.3", features = ["derive"] }
+num = "0.4.3"
