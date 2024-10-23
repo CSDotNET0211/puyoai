@@ -121,6 +121,13 @@ impl Console {
 			queue!(stdout,SetBackgroundColor(Color::Black));
 		}
 	}
+
+	pub fn clear() {
+		let mut stdout = stdout();
+		queue!(
+        stdout,
+        Clear(ClearType::All)).unwrap();
+	}
 	#[allow(unused_must_use)]
 	pub fn print(env: &Env, player_index: usize, current_visible: bool, clear: bool) {
 		let mut stdout = stdout();
@@ -128,7 +135,7 @@ impl Console {
         stdout,
         Hide,
         DisableBlinking,
-        cursor::MoveTo(0, (player_index*25) as u16),
+        cursor::MoveTo(0, (player_index*20) as u16),
         //Clear(ClearType::CurrentLine)
     ).unwrap();
 		if clear {
@@ -199,23 +206,67 @@ impl Console {
 		}
 
 
-		queue!(stdout, cursor::MoveTo((( 10)*2) as u16  , (( 1+(player_index*25) )) as u16),
+		queue!(stdout, cursor::MoveTo((( 10)*2) as u16  , (( 1+(player_index*20) )) as u16),
 	  SetBackgroundColor(Self::get_color(&env.next[0][0])),
 		Print("  "));
-		queue!(stdout, cursor::MoveTo(((10)*2) as u16  , (( 2+(player_index*25) )) as u16),
+		queue!(stdout, cursor::MoveTo(((10)*2) as u16  , (( 2+(player_index*20) )) as u16),
 	  SetBackgroundColor(Self::get_color(&env.next[0][1])),
 		Print("  "));
 
-		queue!(stdout, cursor::MoveTo((( 10)*2) as u16  , (( 4+(player_index*25) )) as u16),
+		queue!(stdout, cursor::MoveTo((( 10)*2) as u16  , (( 4+(player_index*20) )) as u16),
 	  SetBackgroundColor(Self::get_color(&env.next[1][0])),
 		Print("  "));
-		queue!(stdout, cursor::MoveTo(((10)*2) as u16  , (( 5 +(player_index*25))) as u16),
+		queue!(stdout, cursor::MoveTo(((10)*2) as u16  , (( 5 +(player_index*20))) as u16),
 	  SetBackgroundColor(Self::get_color(&env.next[1][1])),
 		Print("  "));
 
+		let mut ojama_size = unsafe { env.ojama.get_all_ojama_size() };
+		let mut yokoku_ojama = String::new();
+
+		let mut ojama = |yokoku_size: usize| {
+			let mut count = ojama_size / yokoku_size;
+			ojama_size %= yokoku_size;
+			for _ in 0..count {
+				let yokoku_name = match yokoku_size {
+					1 => "小",
+					6 => "大",
+					30 => "赤",
+					180 => "星",
+					360 => "月",
+					720 => "王",
+
+					_ => { panic!() }
+				};
+				yokoku_ojama += yokoku_name;
+			}
+		};
+		ojama(720);
+		ojama(360);
+		ojama(180);
+		ojama(30);
+		ojama(6);
+		ojama(1);
 
 		queue!(stdout,SetBackgroundColor(Color::Black));
-		queue!(stdout, cursor::MoveTo((( 0)*2) as u16  , (( 18 )) as u16));
+
+		unsafe {
+			queue!(stdout, cursor::MoveTo(0 , (16+player_index*20) as u16),
+				Clear(ClearType::CurrentLine),
+	  SetBackgroundColor(Color::Black),
+		Print(yokoku_ojama),
+			cursor::MoveTo(0 , (17+player_index*20) as u16),
+				Clear(ClearType::CurrentLine),
+			Print(format!("{}{}", "連鎖数:", env.debug_status.current_chain_count)),
+		cursor::MoveTo(0 , (18+player_index*20) as u16),
+				Clear(ClearType::CurrentLine),
+			Print(format!("{}{:?}", "raw:", env.ojama.get_raw())),
+		
+		);
+		}
+
+
+		queue!(stdout, cursor::MoveTo((( 0)*2) as u16  , (( 40 )) as u16));
+
 
 		//   Print("  "));
 

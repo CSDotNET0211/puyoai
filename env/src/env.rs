@@ -57,6 +57,19 @@ pub static DEAD_POSITION: LazyLock<Vector2> = LazyLock::new(|| {
 	dead_pos
 });
 
+pub struct DebugStatus {
+	pub current_chain_count: usize,
+	pub current_chain_attack: usize,
+}
+
+impl DebugStatus {
+	pub fn new() -> Self {
+		Self {
+			current_chain_attack: 0,
+			current_chain_count: 0,
+		}
+	}
+}
 
 pub struct Env {
 	pub board: Board,
@@ -73,7 +86,7 @@ pub struct Env {
 	rng: ThreadRng,
 	bag: VecDeque<PuyoKind>,
 	rand: u32,
-	pub last_move: bool,
+	pub debug_status: DebugStatus,
 }
 
 
@@ -95,7 +108,7 @@ impl Env {
 			dead: false,
 			bag: VecDeque::with_capacity(256),
 			rand: *seed,
-			last_move: false,
+			debug_status: DebugStatus::new(),
 		}
 	}
 
@@ -169,6 +182,8 @@ impl Env {
 	}
 
 	pub unsafe fn create_new_puyo(&mut self) {
+		self.debug_status.current_chain_count = 0;
+
 		//相殺、お邪魔レート考慮されてない
 		if self.ojama.get_receivable_ojama_size() != 0 {
 			self.try_put_ojama();
@@ -217,7 +232,6 @@ impl Env {
 				value: 2,
 				value2: Default::default(),
 			});
-			self.last_move = false;
 		}
 	}
 
@@ -229,7 +243,6 @@ impl Env {
 				value: 2,
 				value2: Default::default(),
 			});
-			self.last_move = false;
 		}
 	}
 
@@ -355,7 +368,6 @@ impl Env {
 			});
 			Self::rotate_puyo(&mut self.puyo_status, 1);
 			Self::move_puyo(&self.board, &mut self.puyo_status, kick.x, kick.y);
-			self.last_move = false;
 		}
 	}
 
@@ -371,7 +383,6 @@ impl Env {
 			});
 			Self::rotate_puyo(&mut self.puyo_status, 0);
 			Self::move_puyo(&self.board, &mut self.puyo_status, kick.x, kick.y);
-			self.last_move = false;
 		}
 	}
 
@@ -389,7 +400,6 @@ impl Env {
 		} else if self.puyo_status.rotation.0 == 1 {
 			self.puyo_status.position.y += 1;
 		}
-		self.last_move = false;
 	}
 
 	#[inline]
@@ -427,7 +437,6 @@ impl Env {
 			});
 		}
 
-		self.last_move = true;
 
 		let mut chain: u8 = 0;
 		let mut board_mask = BoardBit::default();
@@ -471,14 +480,16 @@ impl Env {
 				self.events.push_back(Event {
 					frame: self.current_frame,
 					kind: EventType::Wait,
-					value: 15,//ぷよんっ
+					value: 25,//ぷよんっ
 					value2: Default::default(),
 				});
-				elapsed_frame += 15;
+				elapsed_frame += 25;
 			}
 
 			chain += 1;
 		}
+
+		self.debug_status.current_chain_count = chain as usize;
 
 		if self.board.is_same(&_mm_setzero_si128(),
 							  &_mm_set_epi64x(0b1111111111111111000000000000000100000000000000010000000000000001u64 as i64,
@@ -504,14 +515,14 @@ impl Env {
 			_ => { panic!() }
 		};
 
-		self.ojama.offset((chain_score / ojama_rate) as usize);
+		let mut attack: usize = (chain_score / ojama_rate) as usize;
+		attack = self.ojama.offset(attack);
 
-
-//TODO:これ次のツモ引いてからお邪魔うけるのと同じことになるやん → 直したで
-
-		if let Some(opponent) = opponent {
-			opponent.ojama.push((chain_score / ojama_rate) as usize, (self.current_frame + elapsed_frame).saturating_sub(opponent.current_frame));
-			//			opponent.events.push_back(( as u32, Attack, chain_score / ojama_rate))
+		if attack != 0 {
+			if let Some(opponent) = opponent {
+				opponent.ojama.push(attack, (self.current_frame + elapsed_frame).saturating_sub(opponent.current_frame));
+				//			opponent.events.push_back(( as u32, Attack, chain_score / ojama_rate))
+			}
 		}
 	}
 

@@ -1,5 +1,6 @@
 use std::{fs, thread};
 use std::collections::{HashMap, VecDeque};
+use std::io::{stdin, stdout};
 use std::time::{Duration, Instant};
 
 use revonet::ea::{EA, Individual};
@@ -75,7 +76,7 @@ fn main() {
 				.read_line(&mut input)
 				.unwrap();
 	*/
-		input = "4".parse().unwrap();
+		input = "5".parse().unwrap();
 
 		match input.trim() {
 			"1" => {}
@@ -228,20 +229,19 @@ fn main() {
 				}
 			}
 			"5" => {
+			//	stdin().read_line(&mut "".to_string());
 				const FRAME_DURATION: Duration = Duration::from_millis(17);
 				let mut previous_time = Instant::now();
 				//	let mut current_frame: usize = 0;
 				let mut player1_actions: VecDeque<KeyType> = VecDeque::new();
 
-				//Initialize
-				//	let mut player1_env = env::env::Env::new(&0);
-				//	player1_env.init();
 
 				let json_str = fs::read_to_string(r"test.json").unwrap();
 				let net: MultilayeredNetwork = serde_json::from_str(&json_str).unwrap();
 				let mut ai = AI::new(NNEvaluator::new(net));
 				let mut battle = BattleEnv::new(ai.clone(), ai.clone());
 
+				Console::clear();
 				loop {
 					let start_time = Instant::now();
 
@@ -258,7 +258,7 @@ fn main() {
 					//		println!("current_ojama:{:?}", &battle.player1.ojama.get_raw());
 
 					//		println!("current_frame:{} / time:{}", battle.game_frame, battle.game_frame / 60);
-							println!("current_events:{:?}", battle.player1.events);
+					//			println!("current_events:{:?}", battle.player1.events);
 
 
 					let elapsed_time = start_time - previous_time;

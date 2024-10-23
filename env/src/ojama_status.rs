@@ -49,27 +49,34 @@ impl OjamaStatus {
 	pub unsafe fn offset(&mut self, mut attack: usize) -> usize {
 		//相殺はfrontから
 		let mut values = std::mem::transmute::<u64, [u16; 4]>(self.0);
-		if values[1] == 0 {
-			if values[0] >= attack as u16 {
-				values[0] -= attack as u16;
-				attack = 0;
-			} else {
-				values[0] = 0;
-				attack -= values[0] as usize;
-			}
+
+		if values[0] >= attack as u16 {
+			values[0] -= attack as u16;
+			attack = 0;
+		} else {
+			attack -= values[0] as usize;
+			values[0] = 0;
 		}
 
-		if values[3] == 0 {
-			if values[2] >= attack as u16 {
-				values[2] -= attack as u16;
-				attack = 0;
-			} else {
-				values[2] = 0;
-				attack -= values[2] as usize;
-			}
+		if values[0] == 0 {
+			values[1] = 0;
 		}
 
-		if values[0] == 0 && values[1] == 0 {
+
+		if values[2] >= attack as u16 {
+			values[2] -= attack as u16;
+			attack = 0;
+		} else {
+			attack -= values[2] as usize;
+			values[2] = 0;
+		}
+
+		if values[2] == 0 {
+			values[3] = 0;
+		}
+
+
+		if values[0] == 0 {
 			values[0] = values[2];
 			values[1] = values[3];
 			values[2] = 0;
@@ -77,7 +84,6 @@ impl OjamaStatus {
 		}
 
 		self.0 = std::mem::transmute(values);
-		//self.try_pack();
 
 		attack
 	}
@@ -96,6 +102,16 @@ impl OjamaStatus {
 		}
 
 		self.0 = std::mem::transmute(values);
+	}
+
+	pub unsafe fn get_all_ojama_size(&self) -> usize {
+		let mut ojama_size = 0;
+		let mut values = std::mem::transmute::<u64, [u16; 4]>(self.0);
+
+		ojama_size += values[0];
+		ojama_size += values[2];
+
+		ojama_size as usize
 	}
 
 	//receive_timeが0のお邪魔の数 関数
