@@ -1,4 +1,5 @@
-﻿use rand::{Rng, thread_rng};
+﻿use std::arch::x86_64::{_mm_set_epi64x, _mm_setzero_si128};
+use rand::{Rng, thread_rng};
 use revonet::neproblem::{NeuroProblem};
 use revonet::neuro::{ActivationFunctionType, MultilayeredNetwork, NeuralArchitecture, NeuralNetwork};
 
@@ -40,7 +41,7 @@ impl NeuroProblem for BattleProblem {
 
 
 	fn compute_with_net_battle<T: NeuralNetwork>(&self, net1: &mut T, net2: &mut T) -> (f32, f32) {
-	
+
 		//return (1., 0.);
 		let result;
 		unsafe {
@@ -56,6 +57,12 @@ impl NeuroProblem for BattleProblem {
 				} else if battle.check_winner() == 2 {
 					result = (0., 1.);
 					break;
+				}
+
+				if battle.game_frame % 3600 == 0 {
+					if battle.player1.board.is_same(&battle.player2.board.0[0], &battle.player2.board.0[1], &battle.player2.board.0[2]) {
+						battle.player1.ojama.push(1, 0);
+					}
 				}
 			}
 		}

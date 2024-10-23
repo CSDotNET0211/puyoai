@@ -13,7 +13,7 @@ pub const HEIGHT: u8 = 14;
 pub const HEIGHT_WITH_BORDER: u8 = 16;
 pub const COLOR_PUYOS: [PuyoKind; 4] = [PuyoKind::Red, PuyoKind::Yellow, PuyoKind::Blue, PuyoKind::Green];
 
-pub struct Board(pub(crate) [__m128i; 3]);
+pub struct Board(pub [__m128i; 3]);
 
 
 impl Board {
@@ -24,6 +24,12 @@ impl Board {
 
 		}
 	}
+
+/*	#[inline]
+	pub fn get_raw(&self) -> [__m128i; 3] {
+		self.0
+	}
+*/
 	#[inline]
 	pub fn clone(&self) -> Self {
 		unsafe {
@@ -273,7 +279,7 @@ impl Board {
 		v0 | v1 | v2
 	}
 
-	
+
 	#[inline]
 	pub unsafe fn is_empty_cell(&self, x: i16, y: i16) -> bool {
 		self.get_bits(PuyoKind::Empty).get_1_flag((x * HEIGHT_WITH_BORDER as i16 + y) as i8)
