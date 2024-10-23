@@ -1,5 +1,6 @@
 ﻿use std::num::NonZeroUsize;
 
+#[derive(Debug)]
 pub struct OjamaStatus(pub u64);
 
 impl OjamaStatus {
@@ -24,7 +25,7 @@ impl OjamaStatus {
 			values[2] = 0;
 			values[3] = 0;
 		}
-		
+
 		self.0 = std::mem::transmute(values);
 	}
 
@@ -145,6 +146,9 @@ impl OjamaStatus {
 		self.0 = std::mem::transmute(values);
 	}
 
+	pub unsafe fn get_raw(&self) -> [u16; 4] {
+		std::mem::transmute::<u64, [u16; 4]>(self.0)
+	}
 
 	/*	unsafe fn try_pack(&mut self) {
 			let mut values = std::mem::transmute::<u64, [u16; 4]>(self.0);

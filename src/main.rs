@@ -75,7 +75,7 @@ fn main() {
 				.read_line(&mut input)
 				.unwrap();
 	*/
-		input = "5".parse().unwrap();
+		input = "4".parse().unwrap();
 
 		match input.trim() {
 			"1" => {}
@@ -202,7 +202,7 @@ fn main() {
 				let start = Instant::now();
 
 
-				let setting = revonet::settings::EASettings::new(32, 999999999, 50);
+				let setting = revonet::settings::EASettings::new(64, 999999999, 50);
 				//let problem = ScoreProblem::new();
 				let problem = BattleProblem::new();
 				let mut ne: NE<BattleProblem> = NE::new(&problem);
@@ -228,9 +228,9 @@ fn main() {
 				}
 			}
 			"5" => {
-				const FRAME_DURATION: Duration = Duration::from_millis(16);
+				const FRAME_DURATION: Duration = Duration::from_millis(17);
 				let mut previous_time = Instant::now();
-				let mut current_frame: usize = 0;
+				//	let mut current_frame: usize = 0;
 				let mut player1_actions: VecDeque<KeyType> = VecDeque::new();
 
 				//Initialize
@@ -253,9 +253,12 @@ fn main() {
 
 					previous_time = Instant::now();
 					Console::print(&battle.player1, 0, true, false);
+					//		println!("current_ojama:{:?}", &battle.player1.ojama.get_raw());
 					Console::print(&battle.player2, 1, true, false);
+					//		println!("current_ojama:{:?}", &battle.player1.ojama.get_raw());
 
-					println!("current_frame:{} / time:{}", current_frame, current_frame / 60);
+					//		println!("current_frame:{} / time:{}", battle.game_frame, battle.game_frame / 60);
+							println!("current_events:{:?}", battle.player1.events);
 
 
 					let elapsed_time = start_time - previous_time;

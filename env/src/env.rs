@@ -40,6 +40,15 @@ pub const ROTATE_DIFF: [[i8; 2]; 4] = [
 	[0, 1],
 ];
 
+#[derive(Debug)]
+pub struct Event {
+	pub kind: EventType,
+	pub frame: usize,
+	//pub until: usize,
+	pub value: usize,
+	pub value2: usize,
+}
+
 //pub type Board = [PuyoKind; WIDTH * HEIGHT];
 //pub type BoardBool = [bool; WIDTH * HEIGHT];
 
@@ -57,13 +66,14 @@ pub struct Env {
 	pub next: [[PuyoKind; 2]; 2],
 	pub current_frame: usize,
 	pub current_score: usize,
-	pub events: VecDeque<(u32, EventType, u32)>,
+	pub events: VecDeque<Event>,
 	pub ojama: OjamaStatus,
 	pub all_clear: bool,
 	pub dead: bool,
 	rng: ThreadRng,
 	bag: VecDeque<PuyoKind>,
 	rand: u32,
+	pub last_move: bool,
 }
 
 
@@ -85,6 +95,7 @@ impl Env {
 			dead: false,
 			bag: VecDeque::with_capacity(256),
 			rand: *seed,
+			last_move: false,
 		}
 	}
 
@@ -157,14 +168,25 @@ impl Env {
 		next_for_pop
 	}
 
-	unsafe fn create_new_puyo(&mut self) {
+	pub unsafe fn create_new_puyo(&mut self) {
+		//相殺、お邪魔レート考慮されてない
+		if self.ojama.get_receivable_ojama_size() != 0 {
+			self.try_put_ojama();
+		}
+
+
 		//if self.board[DEAD_POSITION.x as usize + DEAD_POSITION.y as usize * WIDTH] != PuyoKind::Empty {
 		if !self.board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 			self.dead = true;
 			return;
 		}
 
-		self.current_frame += 2;
+		self.events.push_back(Event {
+			frame: self.current_frame,
+			kind: EventType::Wait,
+			value: 2,
+			value2: Default::default(),
+		});
 
 		//let poped_next = [PuyoKind::Red, PuyoKind::Red];
 		let poped_next = self.pop_next();
@@ -189,13 +211,25 @@ impl Env {
 
 	pub unsafe fn move_right(&mut self) {
 		if Self::move_puyo(&self.board, &mut self.puyo_status, 1, 0) {
-			self.current_frame += 2;
+			self.events.push_back(Event {
+				frame: self.current_frame,
+				kind: EventType::Wait,
+				value: 2,
+				value2: Default::default(),
+			});
+			self.last_move = false;
 		}
 	}
 
 	pub unsafe fn move_left(&mut self) {
 		if Self::move_puyo(&self.board, &mut self.puyo_status, -1, 0) {
-			self.current_frame += 2;
+			self.events.push_back(Event {
+				frame: self.current_frame,
+				kind: EventType::Wait,
+				value: 2,
+				value2: Default::default(),
+			});
+			self.last_move = false;
 		}
 	}
 
@@ -285,7 +319,8 @@ impl Env {
 
 
 		for x in 1..=6 {
-			let ojama_mask_column = ojama_mask_column_size << heights[x];
+			//現在の高さ分shift
+			let ojama_mask_column = ojama_mask_column_size.wrapping_shl(heights[x] as u32);
 			BoardBit::set_bit_true_column(&mut v1.0[x], &ojama_mask_column);
 			BoardBit::set_bit_false_column(&mut v2.0[x], &ojama_mask_column);
 			BoardBit::set_bit_false_column(&mut v3.0[x], &ojama_mask_column);
@@ -294,12 +329,8 @@ impl Env {
 		let ojama_pos_slice = &mut OJAMA_POS;  // Borrow the slice here to extend its lifetime
 		let selected_columns = ojama_pos_slice.choose_multiple(&mut self.rng, (ojama_to_receive % 30) as usize);
 
-
-		//	let ojama_pos_slice = OJAMA_POS.as_mut_slice();
-		//	let selected_columns = ojama_pos_slice.as_mut().choose_multiple(&mut self.rng, (ojama_to_receive % 30) as usize);
-
 		for &pos in selected_columns {
-			let ojama_mask_column = 1 << heights[pos as usize];
+			let ojama_mask_column = 1u16.wrapping_shl(heights[pos as usize] as u32);
 
 			BoardBit::set_bit_true_column(&mut v1.0[pos as usize], &ojama_mask_column);
 			BoardBit::set_bit_false_column(&mut v2.0[pos as usize], &ojama_mask_column);
@@ -316,9 +347,15 @@ impl Env {
 	pub unsafe fn rotate_cw(&mut self) {
 		let mut kick = Vector2::new(0, 0);
 		if Self::is_valid_rotation(&self.puyo_status, &self.board, false, &mut kick) {
-			self.current_frame += 2;
+			self.events.push_back(Event {
+				frame: self.current_frame,
+				kind: EventType::Wait,
+				value: 2,
+				value2: Default::default(),
+			});
 			Self::rotate_puyo(&mut self.puyo_status, 1);
 			Self::move_puyo(&self.board, &mut self.puyo_status, kick.x, kick.y);
+			self.last_move = false;
 		}
 	}
 
@@ -326,31 +363,43 @@ impl Env {
 	pub unsafe fn rotate_ccw(&mut self) {
 		let mut kick = Vector2::new(0, 0);
 		if Self::is_valid_rotation(&self.puyo_status, &self.board, true, &mut kick) {
-			self.current_frame += 2;
+			self.events.push_back(Event {
+				frame: self.current_frame,
+				kind: EventType::Wait,
+				value: 2,
+				value2: Default::default(),
+			});
 			Self::rotate_puyo(&mut self.puyo_status, 0);
 			Self::move_puyo(&self.board, &mut self.puyo_status, kick.x, kick.y);
+			self.last_move = false;
 		}
 	}
 
 	#[inline]
 	pub unsafe fn rotate_180(&mut self) {
 		Self::rotate_puyo(&mut self.puyo_status, 2);
-		self.current_frame += 2;
+		self.events.push_back(Event {
+			frame: self.current_frame,
+			kind: EventType::Wait,
+			value: 2,
+			value2: Default::default(),
+		});
 		if self.puyo_status.rotation.0 == 3 {
 			self.puyo_status.position.y -= 1;
 		} else if self.puyo_status.rotation.0 == 1 {
 			self.puyo_status.position.y += 1;
 		}
+		self.last_move = false;
 	}
 
 	#[inline]
 	pub unsafe fn update(&mut self) {
 		self.current_frame += 1;
 
-	/*	if self.events.len() != 0 {
-			let event = self.events.pop_front().unwrap();
-			//if event.0 <= self.current_frame as u32 {}
-		}*/
+		/*	if self.events.len() != 0 {
+				let event = self.events.pop_front().unwrap();
+				//if event.0 <= self.current_frame as u32 {}
+			}*/
 
 		self.ojama.update_one_frame();
 	}
@@ -358,15 +407,33 @@ impl Env {
 	#[inline]
 	pub unsafe fn quick_drop(&mut self, opponent: Option<&mut Env>) {
 		let drop_count = self.board.put_puyo(&self.puyo_status, &self.center_puyo, &self.movable_puyo);
-		self.current_frame += 2 * drop_count as usize;
+
+		self.center_puyo = PuyoKind::Empty;
+		self.movable_puyo = PuyoKind::Empty;
+
 		if drop_count > 0 {
-			self.current_frame += 10 as usize;
+			self.events.push_back(Event {
+				frame: self.current_frame,
+				kind: EventType::Wait,
+				value: 2 * drop_count as usize,
+				value2: Default::default(),
+			});
+
+			self.events.push_back(Event {
+				frame: self.current_frame,
+				kind: EventType::Wait,
+				value: 15,//ぷよんっ
+				value2: Default::default(),
+			});
 		}
+
+		self.last_move = true;
 
 		let mut chain: u8 = 0;
 		let mut board_mask = BoardBit::default();
 
 		let mut chain_score: u32 = 0;
+		let mut elapsed_frame = 0usize;
 		loop {
 			let score = self.board.erase_if_needed(chain as i32, &mut board_mask);
 			if score == 0 {
@@ -378,12 +445,38 @@ impl Env {
 				self.all_clear = false;
 			}
 
-			self.current_frame += 48 as usize;
+			self.events.push_back(Event {
+				frame: self.current_frame,
+				kind: EventType::Wait,
+				value: 48,//消えるアニメーしょん
+				value2: Default::default(),
+			});
+			elapsed_frame += 48;
+
 			self.current_score += score as usize;
 			chain_score += score;
 
 			let drop_count = self.board.drop_after_erased(&board_mask);
-			self.current_frame += 2 * drop_count as usize;
+
+
+			if drop_count > 0 {
+				self.events.push_back(Event {
+					frame: self.current_frame,
+					kind: EventType::Wait,
+					value: 2 * drop_count as usize,
+					value2: Default::default(),
+				});
+				elapsed_frame += 2 * drop_count as usize;
+
+				self.events.push_back(Event {
+					frame: self.current_frame,
+					kind: EventType::Wait,
+					value: 15,//ぷよんっ
+					value2: Default::default(),
+				});
+				elapsed_frame += 15;
+			}
+
 			chain += 1;
 		}
 
@@ -394,13 +487,7 @@ impl Env {
 			self.all_clear = true;
 		}
 
-		//相殺
-		let left = self.ojama.offset((chain_score / 70) as usize);
 
-		if left != 0 {
-			self.try_put_ojama();
-		}
-//TODO:
 		let ojama_rate = match self.current_frame / 60 {
 			v if v <= 95 => { 70 }
 			v if v <= 111 => { 52 }
@@ -417,13 +504,15 @@ impl Env {
 			_ => { panic!() }
 		};
 
-		//到着予定フレームはわかってるから、相手のフレームとの差分で
+		self.ojama.offset((chain_score / ojama_rate) as usize);
+
+
+//TODO:これ次のツモ引いてからお邪魔うけるのと同じことになるやん → 直したで
+
 		if let Some(opponent) = opponent {
-			opponent.ojama.push((chain_score / ojama_rate) as usize, (self.current_frame + 5).saturating_sub(opponent.current_frame));
+			opponent.ojama.push((chain_score / ojama_rate) as usize, (self.current_frame + elapsed_frame).saturating_sub(opponent.current_frame));
 			//			opponent.events.push_back(( as u32, Attack, chain_score / ojama_rate))
 		}
-
-		self.create_new_puyo();
 	}
 
 

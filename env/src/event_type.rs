@@ -1,4 +1,5 @@
-﻿pub enum EventType{
+﻿#[derive(Debug)]
+pub enum EventType{
 	Wait,
 	Attack
 	

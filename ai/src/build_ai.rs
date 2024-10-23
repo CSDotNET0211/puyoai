@@ -47,9 +47,19 @@ impl<E: Evaluator> AI<E> {
 	}
 
 	pub unsafe fn search(&mut self, board: &Board, current: &PuyoStatus, next: &Vec<PuyoKind>, ojama: &OjamaStatus, center_puyo: PuyoKind, movable_puyo: PuyoKind) {
+		let debug = board.get_not_empty_board();
 		self.best_move = Option::from(AIMove::new(-999., vec![Drop]));
 		//self.best_move = None;
 		self.debug = None;
+
+		/*if ojama.0!=0{
+			panic!("test");
+		}*/
+		/*
+		if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
+			return;;
+		}*/
+
 		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0);
 
 		if let Some(pos) = self.best_move.as_mut().unwrap().path.iter().position(|&x| x == Drop) {
@@ -73,12 +83,22 @@ impl<E: Evaluator> AI<E> {
 		let mut hash_position = HashMap::new();
 		Self::get_put_places(&board, &current, &mut hash_position, 0, &mut places, &(center_puyo as u8), &(movable_puyo as u8));
 
-		//前のevalは足す
 		for place in places {
 			//boardのコピーに適用して評価関数に
 			let mut new_board = board.clone();
 
 			new_board.put_puyo(&place.1.1, &center_puyo, &movable_puyo);
+
+		//	self.ojama.offset((chain_score / ojama_rate) as usize);
+		/*	if ojama.get_receivable_ojama_size()!=0{
+				ojama.
+			}*/
+//お邪魔降らせて
+
+			//TODO:全部continueの場合は？
+			if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
+				continue;
+			}
 
 			let mut new_score = score;
 			let mut chain = 0;
@@ -111,10 +131,7 @@ impl<E: Evaluator> AI<E> {
 			new_movements.extend(movement);
 //連鎖を実行 所要時間、火力、地形変更度
 
-			//TODO:全部continueの場合は？
-			if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
-				continue;
-			}
+		
 
 
 			//path
@@ -133,7 +150,7 @@ impl<E: Evaluator> AI<E> {
 				//
 
 				let mut debug = Debug::new();
-				let eval = self.evaluator.evaluate(&new_board, &new_score, &0, &mut debug);
+				let eval = self.evaluator.evaluate(&new_board, &new_score, &0, &mut debug,ojama);
 
 				//highest_evalよりも評価が高かったら、計算したpath、
 				if self.best_move == None || self.best_move.as_ref().unwrap().eval < eval {

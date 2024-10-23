@@ -18,7 +18,7 @@ impl BattleProblem {
 
 impl NeuroProblem for BattleProblem {
 	fn get_inputs_num(&self) -> usize {
-		13
+		17
 	}
 
 	fn get_outputs_num(&self) -> usize {
@@ -40,22 +40,27 @@ impl NeuroProblem for BattleProblem {
 
 
 	fn compute_with_net_battle<T: NeuralNetwork>(&self, net1: &mut T, net2: &mut T) -> (f32, f32) {
+	
+		//return (1., 0.);
+		let result;
 		unsafe {
-			rayon::spawn(move || {});
-
-			let mut ai1 = AI::new(NNEvaluator::new(net1.clone()));
-			let mut ai2 = AI::new(NNEvaluator::new(net2.clone()));
+			let ai1 = AI::new(NNEvaluator::new(net1.clone()));
+			let ai2 = AI::new(NNEvaluator::new(net2.clone()));
 			let mut battle = BattleEnv::new(ai1, ai2);
 
 			loop {
 				battle.update();
 				if battle.check_winner() == 1 {
-					return (1., 0.);
+					result = (1., 0.);
+					break;
 				} else if battle.check_winner() == 2 {
-					return (0., 1.);
+					result = (0., 1.);
+					break;
 				}
 			}
 		}
+
+		result
 	}
 }
 

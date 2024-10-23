@@ -6,6 +6,7 @@ use revonet::neuro::NeuralNetwork;
 use env::board::{Board, COLOR_PUYOS, WIDTH_WITH_BORDER};
 use env::board_bit::BoardBit;
 use env::env::DEAD_POSITION;
+use env::ojama_status::OjamaStatus;
 use env::puyo_kind::PuyoKind;
 
 use crate::debug::Debug;
@@ -28,7 +29,7 @@ pub struct NNEvaluator<T: NeuralNetwork> {
 
 
 impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
-	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug) -> f32 {
+	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus) -> f32 {
 		unsafe {
 			if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				debug.dead = true;
@@ -97,6 +98,7 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 			}
 		}
 
+		let raw_ojama = unsafe { ojama.get_raw() };
 		let result = self.neuralnetwork.compute(&[
 			link2 as f32,
 			link3 as f32,
@@ -110,7 +112,11 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 			height[DEAD_POSITION.x as usize] as f32,
 			bumpness as f32,
 			height_sum as f32,
-			highest_template_score as f32
+			highest_template_score as f32,
+			raw_ojama[0] as f32,
+			raw_ojama[1] as f32,
+			raw_ojama[2] as f32,
+			raw_ojama[3] as f32,
 		]);
 
 		result[0]

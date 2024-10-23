@@ -128,7 +128,7 @@ impl Console {
         stdout,
         Hide,
         DisableBlinking,
-        cursor::MoveTo(0, (player_index*30) as u16),
+        cursor::MoveTo(0, (player_index*25) as u16),
         //Clear(ClearType::CurrentLine)
     ).unwrap();
 		if clear {
@@ -154,7 +154,7 @@ impl Console {
 		}
 
 
-		if current_visible {
+		if current_visible && env.center_puyo != PuyoKind::Empty && env.movable_puyo != PuyoKind::Empty {
 			temp_board[(env.puyo_status.position.x + env.puyo_status.position.y * WIDTH_WITH_BORDER as i8) as usize] = env.center_puyo;
 			temp_board[((env.puyo_status.position.x + env.puyo_status.position_diff.x) +
 				(env.puyo_status.position.y + env.puyo_status.position_diff.y) *
@@ -199,17 +199,17 @@ impl Console {
 		}
 
 
-		queue!(stdout, cursor::MoveTo((( 10)*2) as u16  , (( 1 )) as u16),
+		queue!(stdout, cursor::MoveTo((( 10)*2) as u16  , (( 1+(player_index*25) )) as u16),
 	  SetBackgroundColor(Self::get_color(&env.next[0][0])),
 		Print("  "));
-		queue!(stdout, cursor::MoveTo(((10)*2) as u16  , (( 2 )) as u16),
+		queue!(stdout, cursor::MoveTo(((10)*2) as u16  , (( 2+(player_index*25) )) as u16),
 	  SetBackgroundColor(Self::get_color(&env.next[0][1])),
 		Print("  "));
 
-		queue!(stdout, cursor::MoveTo((( 10)*2) as u16  , (( 4 )) as u16),
+		queue!(stdout, cursor::MoveTo((( 10)*2) as u16  , (( 4+(player_index*25) )) as u16),
 	  SetBackgroundColor(Self::get_color(&env.next[1][0])),
 		Print("  "));
-		queue!(stdout, cursor::MoveTo(((10)*2) as u16  , (( 5 )) as u16),
+		queue!(stdout, cursor::MoveTo(((10)*2) as u16  , (( 5 +(player_index*25))) as u16),
 	  SetBackgroundColor(Self::get_color(&env.next[1][1])),
 		Print("  "));
 

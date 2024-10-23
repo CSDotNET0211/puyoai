@@ -2,6 +2,7 @@
 use env::board::{Board, COLOR_PUYOS, WIDTH_WITH_BORDER};
 use env::board_bit::BoardBit;
 use env::env::DEAD_POSITION;
+use env::ojama_status::OjamaStatus;
 use env::puyo_kind::PuyoKind;
 use crate::debug::Debug;
 use crate::evaluator::Evaluator;
@@ -20,7 +21,7 @@ pub struct SimpleEvaluator {
 }
 
 impl Evaluator for SimpleEvaluator {
-	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug) -> f32 {
+	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus) -> f32 {
 		//	Console::print_board(&board);
 		let mut result = 0.;
 		unsafe {
