@@ -64,6 +64,14 @@ impl NeuroProblem for BattleProblem {
 						battle.player1.ojama.push(1, 0);
 					}
 				}
+
+				if battle.game_frame == 36000 {
+					println!("警告：何らかの理由によりゲームが終わってない可能性があります、ゲームを強制リセット");
+					let ai1 = AI::new(NNEvaluator::new(net1.clone()));
+					let ai2 = AI::new(NNEvaluator::new(net2.clone()));
+
+					battle = BattleEnv::new(ai1, ai2);
+				}
 			}
 		}
 

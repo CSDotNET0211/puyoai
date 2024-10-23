@@ -229,7 +229,7 @@ fn main() {
 				}
 			}
 			"5" => {
-			//	stdin().read_line(&mut "".to_string());
+				//	stdin().read_line(&mut "".to_string());
 				const FRAME_DURATION: Duration = Duration::from_millis(17);
 				let mut previous_time = Instant::now();
 				//	let mut current_frame: usize = 0;
@@ -247,7 +247,8 @@ fn main() {
 
 					battle.update();
 					if battle.check_winner() != -1 {
-						panic!();
+						println!("どっちかがGAME OVER");
+						stdin().read_line(&mut "".to_string());
 					}
 
 
