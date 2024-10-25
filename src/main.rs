@@ -1,8 +1,10 @@
 use std::{fs, thread};
 use std::collections::{HashMap, VecDeque};
-use std::io::{stdin, stdout};
+use std::io::stdin;
 use std::time::{Duration, Instant};
 
+#[cfg(feature = "ppc")]
+use ppc::PpcPuyoKind;
 use revonet::ea::{EA, Individual};
 use revonet::ne::NE;
 use revonet::neuro::MultilayeredNetwork;
@@ -17,15 +19,11 @@ use env::puyo_kind::PuyoKind;
 use env::puyo_status::PuyoStatus;
 use env::rotation::Rotation;
 use env::vector2::Vector2;
-#[cfg(feature = "ppc")]
-use ppc::{PpcInput, PpcPuyoKind};
 
 use crate::battle_env::BattleEnv;
 use crate::log::Log;
 use crate::log::LogType::INFO;
 use crate::problems::battle_problem::BattleProblem;
-use crate::problems::score_problem::ScoreProblem;
-
 
 mod log;
 mod battle_env;
@@ -76,7 +74,7 @@ fn main() {
 				.read_line(&mut input)
 				.unwrap();
 	*/
-		input = "4".parse().unwrap();
+		input = "5".parse().unwrap();
 
 		match input.trim() {
 			"1" => {}
@@ -200,8 +198,6 @@ fn main() {
 
 				log.write(INFO, "Training started");
 
-				let start = Instant::now();
-
 
 				let setting = revonet::settings::EASettings::new(64, 999999999, 50);
 				//let problem = ScoreProblem::new();
@@ -209,36 +205,16 @@ fn main() {
 				let mut ne: NE<BattleProblem> = NE::new(&problem);
 				//let mut ne: NE<ScoreProblem> = NE::new(&problem);
 				//let res = ne.run(setting, &false).unwrap();
-				let res = ne.run(setting, &true).unwrap();
-				let net = res.best.clone().to_net_mut().unwrap().to_owned();
-				let json = serde_json::to_string(&net).unwrap();
-
-				println!("best individual:\n {}", json);
-
-				let duration = start.elapsed();
-				println!("learning time:{:?}", duration);
-				panic!();
-				let mut battle =
-					BattleEnv::new(AI::new(SimpleEvaluator::new([3., 5., 10., 18., 26., -15., -10.4, -0.2])),
-								   AI::new(SimpleEvaluator::new([3., 5., 10., 18., 26., -15., -10.4, -0.2])));
-				loop {
-					battle.update();
-					if battle.check_winner() != -1 {
-						//勝負あり
-					}
-				}
+				let _ = ne.run(setting, &true).unwrap();
 			}
 			"5" => {
 				//	stdin().read_line(&mut "".to_string());
 				const FRAME_DURATION: Duration = Duration::from_millis(17);
 				let mut previous_time = Instant::now();
-				//	let mut current_frame: usize = 0;
-				let mut player1_actions: VecDeque<KeyType> = VecDeque::new();
-
 
 				let json_str = fs::read_to_string(r"test.json").unwrap();
 				let net: MultilayeredNetwork = serde_json::from_str(&json_str).unwrap();
-				let mut ai = AI::new(NNEvaluator::new(net));
+				let ai = AI::new(NNEvaluator::new(net));
 				let mut battle = BattleEnv::new(ai.clone(), ai.clone());
 
 				Console::clear();
@@ -248,7 +224,7 @@ fn main() {
 					battle.update();
 					if battle.check_winner() != -1 {
 						println!("どっちかがGAME OVER");
-						stdin().read_line(&mut "".to_string());
+						stdin().read_line(&mut "".to_string()).unwrap();
 					}
 
 
@@ -268,57 +244,6 @@ fn main() {
 						thread::sleep(FRAME_DURATION - elapsed_time);
 					}
 				}
-
-				/*
-				loop {
-					let start_time = Instant::now();
-
-					//envのcurrentframeの方が大きい場合は待機
-					//層じゃない場合は予定してる操作を行う、無かったら考えろ
-					if player1_env.current_frame < current_frame {
-						player1_env.current_frame += 1;
-
-
-						next.clear();
-						for next_p2 in player1_env.next[0] {
-							next.push(next_p2);
-						}
-
-						if player1_actions.len() == 0 {
-							ai.search(&player1_env.board, &player1_env.puyo_status, &next, player1_env.center_puyo, player1_env.movable_puyo, player1_env.ojama_count);
-							player1_actions = VecDeque::from(ai.best_move.as_ref().unwrap().path.clone());
-						}
-
-
-						match player1_actions.pop_front().unwrap() {
-							KeyType::Right => player1_env.move_right(),
-							KeyType::Left => player1_env.move_left(),
-							KeyType::Top => panic!(),
-							KeyType::Down => panic!(),
-							KeyType::Drop => {
-								player1_env.quick_drop();
-								//break;
-							}
-							KeyType::RotateRight => player1_env.rotate_ccw(),
-							KeyType::RotateLeft => player1_env.rotate_cw(),
-							KeyType::Rotate180 => player1_env.rotate_180()
-						}
-					}
-
-					//Update
-
-
-					let elapsed_time = start_time - previous_time;
-
-					if elapsed_time < FRAME_DURATION {
-						thread::sleep(FRAME_DURATION - elapsed_time);
-					}
-					previous_time = Instant::now();
-					current_frame += 1;
-					Console::print(&player1_env, true, false);
-
-					println!("current_frame:{} / time:{}", current_frame, current_frame / 60);
-				}	*/
 			}
 			_ => {}
 		}

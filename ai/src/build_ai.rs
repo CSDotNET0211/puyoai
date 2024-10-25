@@ -47,7 +47,7 @@ impl<E: Evaluator> AI<E> {
 	}
 
 	pub unsafe fn search(&mut self, board: &Board, current: &PuyoStatus, next: &Vec<PuyoKind>, ojama: &OjamaStatus, center_puyo: PuyoKind, movable_puyo: PuyoKind) {
-		let debug = board.get_not_empty_board();
+		//let debug = board.get_not_empty_board();
 		self.best_move = Option::from(AIMove::new(-999., vec![Drop]));
 		//self.best_move = None;
 		self.debug = None;

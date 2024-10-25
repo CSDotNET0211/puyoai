@@ -1,14 +1,14 @@
 ﻿use std::arch::x86_64::{__m128i, _mm_load_si128, _mm_set_epi64x, _mm_setzero_si128, _mm_store_si128};
 use std::collections::VecDeque;
 use std::sync::LazyLock;
-use rand::{Rng, thread_rng};
+
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
+use rand::thread_rng;
 
 use crate::board::{Board, WIDTH_WITH_BORDER};
 use crate::board_bit::BoardBit;
 use crate::event_type::EventType;
-use crate::event_type::EventType::Attack;
 use crate::ojama_status::OjamaStatus;
 use crate::puyo_kind::PuyoKind;
 use crate::puyo_status::PuyoStatus;
@@ -316,7 +316,7 @@ impl Env {
 		}
 		self.ojama.use_ojama(ojama_to_receive);
 
-		let heights = self.board.get_heights();
+		let mut heights = self.board.get_heights();
 
 		let row = ojama_to_receive / 6;
 
@@ -339,8 +339,15 @@ impl Env {
 			BoardBit::set_bit_false_column(&mut v3.0[x], &ojama_mask_column);
 		}
 
-		let ojama_pos_slice = &mut OJAMA_POS;  // Borrow the slice here to extend its lifetime
+		let ojama_pos_slice = &OJAMA_POS;  // Borrow the slice here to extend its lifetime
 		let selected_columns = ojama_pos_slice.choose_multiple(&mut self.rng, (ojama_to_receive % 30) as usize);
+
+		self.board.0[0] = _mm_load_si128(v1.0.as_ptr() as *const __m128i);
+		self.board.0[1] = _mm_load_si128(v2.0.as_ptr() as *const __m128i);
+		self.board.0[2] = _mm_load_si128(v3.0.as_ptr() as *const __m128i);
+		let mut heights = self.board.get_heights();
+		
+
 
 		for &pos in selected_columns {
 			let ojama_mask_column = 1u16.wrapping_shl(heights[pos as usize] as u32);

@@ -25,11 +25,11 @@ impl Board {
 		}
 	}
 
-/*	#[inline]
-	pub fn get_raw(&self) -> [__m128i; 3] {
-		self.0
-	}
-*/
+	/*	#[inline]
+		pub fn get_raw(&self) -> [__m128i; 3] {
+			self.0
+		}
+	*/
 	#[inline]
 	pub fn clone(&self) -> Self {
 		unsafe {
@@ -120,18 +120,18 @@ impl Board {
 		heights
 	}
 
-	/*/// heightsはそっちで用意して
-	#[inline]
-	pub unsafe fn get_heights2(&self, heights: &[u16; 8]) {
-		let mut heights: [u16; 8] = [0; 8];
+/*	#[inline]
+	pub unsafe fn set_heights(v1: &SplitBoard, v2: &SplitBoard, v3: &SplitBoard, heights: &mut [u16; 8]) {
+		//let mut heights: [u16; 8] = [0; 8];
 		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.get_not_empty_board().0);
+		//	_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.get_not_empty_board().0);
+
+		//すでにsplitboardだから、
+		Self::get_not_empty_board_1(&(), &(), &())
 
 		for i in 0..8 {
 			heights[i] = _popcnt32(board_split_aligned.0[i] as i32) as u16;
 		}
-
-		heights
 	}*/
 
 	#[inline]
@@ -275,6 +275,15 @@ impl Board {
 		let v0 = BoardBit(self.0[0]);
 		let v1 = BoardBit(self.0[1]);
 		let v2 = BoardBit(self.0[2]);
+
+		v0 | v1 | v2
+	}
+
+	#[inline]
+	pub unsafe fn get_not_empty_board_1(v0: &__m128i, v1: &__m128i, v2: &__m128i) -> BoardBit {
+		let v0 = BoardBit(*v0);
+		let v1 = BoardBit(*v1);
+		let v2 = BoardBit(*v2);
 
 		v0 | v1 | v2
 	}

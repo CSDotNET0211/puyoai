@@ -1,6 +1,4 @@
-﻿use std::num::NonZeroUsize;
-
-#[derive(Debug)]
+﻿#[derive(Debug)]
 pub struct OjamaStatus(pub u64);
 
 impl OjamaStatus {
@@ -94,6 +92,7 @@ impl OjamaStatus {
 
 	//1と2のお邪魔両方ともreceiveまでの時間が0だったらまとめる
 	//それぞれの操作の前に必ず行う
+	#[allow(dead_code)]
 	unsafe fn try_collect(&mut self) {
 		let mut values = std::mem::transmute::<u64, [u16; 4]>(self.0);
 		if values[1] == 0 && values[3] == 0 {
@@ -106,7 +105,7 @@ impl OjamaStatus {
 
 	pub unsafe fn get_all_ojama_size(&self) -> usize {
 		let mut ojama_size = 0;
-		let mut values = std::mem::transmute::<u64, [u16; 4]>(self.0);
+		let values = std::mem::transmute::<u64, [u16; 4]>(self.0);
 
 		ojama_size += values[0];
 		ojama_size += values[2];
@@ -117,7 +116,7 @@ impl OjamaStatus {
 	//receive_timeが0のお邪魔の数 関数
 	pub unsafe fn get_receivable_ojama_size(&self) -> usize {
 		let mut ojama_size = 0;
-		let mut values = std::mem::transmute::<u64, [u16; 4]>(self.0);
+		let values = std::mem::transmute::<u64, [u16; 4]>(self.0);
 
 		if values[1] == 0 {
 			ojama_size += values[0];
@@ -129,6 +128,7 @@ impl OjamaStatus {
 		ojama_size as usize
 	}
 	//use_garbage 関数 offsetとちょっと似てるかもね receive_timeが0だったら使うよ
+	#[allow(unused_assignments)]
 	pub unsafe fn use_ojama(&mut self, mut use_size: usize) {
 		//使うのはfrontとか関係ない
 		let mut values = std::mem::transmute::<u64, [u16; 4]>(self.0);
@@ -142,6 +142,7 @@ impl OjamaStatus {
 			}
 		}
 
+		
 		if values[3] == 0 {
 			if values[2] >= use_size as u16 {
 				values[2] -= use_size as u16;

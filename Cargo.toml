@@ -12,8 +12,6 @@ ppc = { path = "../ppc", optional = true }
 log = { version = "0.4.22", features = [] }
 chrono = "0.4.38"
 strum = { version = "0.26.3", features = ["derive"] }
-oxineat-nn = "0.1.1"
-oxineat = "0.3.2"
 ron = "0.7.0"
 rand = "0.3.0"
 revonet = { path = "../revonet" }

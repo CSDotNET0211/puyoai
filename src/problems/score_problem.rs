@@ -10,6 +10,7 @@ use env::env::Env;
 #[derive(Clone)]
 pub struct ScoreProblem {}
 
+#[allow(dead_code)]
 impl ScoreProblem {
 	pub fn new() -> ScoreProblem { ScoreProblem {} }
 }

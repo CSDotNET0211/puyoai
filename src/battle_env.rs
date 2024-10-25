@@ -52,30 +52,24 @@ impl<E: Evaluator> BattleEnv<E> {
 		self.player1.update();
 		self.player2.update();
 
-		//self.player1.current_frame = self.game_frame;
-		//self.player2.current_frame = self.game_frame;
-
-		if Self::update_player(self.game_frame, &mut self.player1.events, &mut self.player2) {
-			Self::process_key_inputs(self.game_frame, &mut self.player1_inputs, &mut self.player1, &mut self.player1_ai, &mut self.player2, true);
+		if Self::update_player(self.game_frame, &mut self.player1.events) {
+			Self::process_key_inputs(&mut self.player1_inputs, &mut self.player1, &mut self.player1_ai, &mut self.player2);
 		}
 
-		if Self::update_player(self.game_frame, &mut self.player2.events, &mut self.player1) {
-			Self::process_key_inputs(self.game_frame, &mut self.player2_inputs, &mut self.player2, &mut self.player2_ai, &mut self.player1, false);
+		if Self::update_player(self.game_frame, &mut self.player2.events) {
+			Self::process_key_inputs(&mut self.player2_inputs, &mut self.player2, &mut self.player2_ai, &mut self.player1);
 		}
-
 
 		self.game_frame += 1;
 	}
 
 	///イベント処理
-	fn update_player(current_frame: usize, events: &mut VecDeque<Event>, opponent_env: &mut Env) -> bool {
+	fn update_player(current_frame: usize, events: &mut VecDeque<Event>) -> bool {
 		while events.len() != 0 {
 			if events[0].frame <= current_frame {
 				match events[0].kind {
 					EventType::Wait => {
-					//	dbg!(&events);
 						if events[0].value == 0 {
-							dbg!(&events);
 							events.remove(0);
 							continue;
 						}
@@ -84,15 +78,10 @@ impl<E: Evaluator> BattleEnv<E> {
 						if events[0].value == 0 {
 							events.remove(0);
 						} else {
-							
 							return false;
 						}
 					}
-					EventType::Attack => unsafe {
-						panic!();
-						opponent_env.ojama.push(events[0].value, events[0].value2);
-						events.remove(0);
-					}
+					_ => panic!()
 				}
 			} else {
 				break;
@@ -103,11 +92,7 @@ impl<E: Evaluator> BattleEnv<E> {
 	}
 
 	//指定したプレイヤーのAI操作をします
-	unsafe fn process_key_inputs(current_frame: usize, player_inputs: &mut VecDeque<KeyType>, env: &mut Env, ai: &mut AI<E>, opponent: &mut Env, aaa: bool) {
-		/*if env.current_frame >= current_frame {
-			return;
-		}*/
-
+	unsafe fn process_key_inputs(player_inputs: &mut VecDeque<KeyType>, env: &mut Env, ai: &mut AI<E>, opponent: &mut Env) {
 		if env.center_puyo == PuyoKind::Empty &&
 			env.movable_puyo == PuyoKind::Empty {
 			env.create_new_puyo();

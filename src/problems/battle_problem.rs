@@ -1,18 +1,16 @@
-﻿use std::arch::x86_64::{_mm_set_epi64x, _mm_setzero_si128};
-use rand::{Rng, thread_rng};
-use revonet::neproblem::{NeuroProblem};
+﻿use rand::thread_rng;
+use revonet::neproblem::NeuroProblem;
 use revonet::neuro::{ActivationFunctionType, MultilayeredNetwork, NeuralArchitecture, NeuralNetwork};
 
 use ai::build_ai::AI;
 use ai::evaluator::nn_evaluator::NNEvaluator;
-use ai::key_type::KeyType;
-use env::env::Env;
+
 use crate::battle_env::BattleEnv;
-use crate::problems::score_problem::ScoreProblem;
 
 #[derive(Clone)]
 pub struct BattleProblem {}
 
+#[allow(dead_code)]
 impl BattleProblem {
 	pub fn new() -> BattleProblem { BattleProblem {} }
 }

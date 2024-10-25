@@ -39,7 +39,7 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 
 //		let mut key = IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
 		let height = unsafe { board.get_heights() };
-		let mut virtual_ignites: BTreeMap<u32, IgniteKey> = BTreeMap::new();
+		let virtual_ignites: BTreeMap<u32, IgniteKey> = BTreeMap::new();
 		//unsafe { Self::calc_num_of_key_puyos(&board, &mut virtual_ignites, &height); }
 
 		let mut link2 = 0;
@@ -145,100 +145,92 @@ impl<T: NeuralNetwork> NNEvaluator<T> {
 		}
 	}
 
-
-	///発火に必要なぷよの数と種類を列挙、[ぷよの種類、必要な数、段差変更度]
-	unsafe fn calc_num_of_key_puyos(board: &Board, keys: &mut BTreeMap<u32, IgniteKey>, heights: &[u16; 8]) {
-		//それぞれの列に1~3置いて可能性のある連鎖を列挙 6列*3通り
-		//それぞれの列に横で2~3個置いて可能性のある連鎖を列挙 5通り+4通り
-
-		//縦 TODO:数要検討
-		for puyo_type in PUYOS {
-			for puyo_count in 1..=2 {
-				for x in 1..WIDTH_WITH_BORDER - 1 {
-					let mut new_board = board.clone();
-
-					//ここから上(-1)に積みあげる
-					//TODO:そもそも仮想発火で13段目って危なくね？
-					for _i in 0..puyo_count {
-						if heights[x as usize] + 2 < 14 {
-							new_board.put_puyo_1(x, &puyo_type);
-						} else {
-							continue;
+	/*
+		///発火に必要なぷよの数と種類を列挙、[ぷよの種類、必要な数、段差変更度]
+		unsafe fn calc_num_of_key_puyos(board: &Board, keys: &mut BTreeMap<u32, IgniteKey>, heights: &[u16; 8]) {
+			//それぞれの列に1~3置いて可能性のある連鎖を列挙 6列*3通り
+			//それぞれの列に横で2~3個置いて可能性のある連鎖を列挙 5通り+4通り
+	
+			//縦 TODO:数要検討
+			for puyo_type in PUYOS {
+				for puyo_count in 1..=2 {
+					for x in 1..WIDTH_WITH_BORDER - 1 {
+						let mut new_board = board.clone();
+	
+						//ここから上(-1)に積みあげる
+						//TODO:そもそも仮想発火で13段目って危なくね？
+						for _i in 0..puyo_count {
+							if heights[x as usize] + 2 < 14 {
+								new_board.put_puyo_1(x, &puyo_type);
+							} else {
+								continue;
+							}
 						}
-					}
-
-					let mut chain: i32 = 0;
-					let mut score = 0;
-					let mut board_mask = BoardBit::default();
-					loop {
-						let temp_score = new_board.erase_if_needed(chain, &mut board_mask);
-						if temp_score == 0 {
-							break;
+	
+						let mut chain: i32 = 0;
+						let mut score = 0;
+						let mut board_mask = BoardBit::default();
+						loop {
+							let temp_score = new_board.erase_if_needed(chain, &mut board_mask);
+							if temp_score == 0 {
+								break;
+							}
+							new_board.drop_after_erased(&board_mask);
+	//TODO: elapsed time
+							score += temp_score;
+							chain += 1;
 						}
-						new_board.drop_after_erased(&board_mask);
-//TODO: elapsed time
-						score += temp_score;
-						chain += 1;
-					}
-
-					let key = IgniteKey::new(puyo_type, puyo_count, chain as u8, 0, score);
-
-
-					//置き終わり、評価
-					if score != 0 {
-						keys.insert(score, key);
+	
+						let key = IgniteKey::new(puyo_type, puyo_count, chain as u8, 0, score);
+	
+	
+						//置き終わり、評価
+						if score != 0 {
+							keys.insert(score, key);
+						}
 					}
 				}
 			}
-		}
-//●●〇〇〇〇
-		/*
-				//横
-				for puyo_type in PUYOS {
-					for puyo_count in 2..4 {
-						for base_x in 0..WIDTH {
-							let mut new_board = board.clone();
-							for puyo_x in 0..puyo_count {
-								//	let mut diff_x = 0;
-								let x = base_x + puyo_x;
-								if x >= WIDTH {
-									break;
+	//●●〇〇〇〇
+			/*
+					//横
+					for puyo_type in PUYOS {
+						for puyo_count in 2..4 {
+							for base_x in 0..WIDTH {
+								let mut new_board = board.clone();
+								for puyo_x in 0..puyo_count {
+									//	let mut diff_x = 0;
+									let x = base_x + puyo_x;
+									if x >= WIDTH {
+										break;
+									}
+			
+			
+									//一番上から落とす、要検討
+									Env::put_puyo(&mut new_board, x as i32, 0, puyo_type);
 								}
-		
-		
-								//一番上から落とす、要検討
-								Env::put_puyo(&mut new_board, x as i32, 0, puyo_type);
-							}
-		
-		
-							let mut chain: u8 = 0;
-							let mut attack = 0;
-							loop {
-								let score = Env::erase_if_needed(&mut new_board, &chain);
-								if score == 0 {
-									break;
-								} else {
-									attack += score / 70;
-									chain += 1;
+			
+			
+								let mut chain: u8 = 0;
+								let mut attack = 0;
+								loop {
+									let score = Env::erase_if_needed(&mut new_board, &chain);
+									if score == 0 {
+										break;
+									} else {
+										attack += score / 70;
+										chain += 1;
+									}
 								}
+			
+								//置き終わり、評価
+								keys.push(IgniteKey::new(puyo_type, puyo_count as u8, chain, 0, attack));
 							}
-		
-							//置き終わり、評価
-							keys.push(IgniteKey::new(puyo_type, puyo_count as u8, chain, 0, attack));
 						}
 					}
-				}
-			*/
-	}
+				*/
+		}*/
 
-	#[inline]
-	pub unsafe fn form_check(form: &[i32], allow_inverse: &bool) {
-		//定義の形からbitのandを用いて判定を行う
-		//それぞれの色ぷよごとに見る、1マスずつ判定するが、発見した場合はその数だけ進む
-		//地形一致度、emptyならいいけど他色はアウト
-		//1塊ごとのand用地形の配列？
-		//let 
-	}
 
 	#[inline]
 	pub unsafe fn find_links(mask: &BoardBit, link2: &mut i32, link3: &mut i32) {
