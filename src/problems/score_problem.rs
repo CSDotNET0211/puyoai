@@ -48,7 +48,7 @@ impl NeuroProblem for ScoreProblem {
 				for next_p2 in env.next[0] {
 					next.push(next_p2);
 				}
-				ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo);
+				ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared,&env.ojama_rate);
 
 				let path = ai.best_move.as_ref().unwrap();
 				for key in path.path.iter() {

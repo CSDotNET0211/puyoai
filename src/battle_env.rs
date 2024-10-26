@@ -1,4 +1,5 @@
 ﻿use std::collections::VecDeque;
+use std::time::Instant;
 use rand::{Rng, thread_rng};
 
 use ai::build_ai::AI;
@@ -105,7 +106,10 @@ impl<E: Evaluator> BattleEnv<E> {
 				next.push(next_p);
 			}
 
-			ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo);
+			//	let think_start = Instant::now();
+			ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate);
+			//	dbg!(think_start.elapsed().as_millis());
+
 			*player_inputs = ai.best_move.as_ref().unwrap().path.to_vec().into();
 		} else {
 			match player_inputs.pop_front().unwrap() {

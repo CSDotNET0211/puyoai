@@ -21,7 +21,7 @@ pub struct SimpleEvaluator {
 }
 
 impl Evaluator for SimpleEvaluator {
-	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus) -> f32 {
+	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize) -> f32 {
 		//	Console::print_board(&board);
 		let mut result = 0.;
 		unsafe {

@@ -27,6 +27,16 @@ pub const ROTATE_KICKS: [[i8; 2]; 4] = [
 	[0, -1],
 ];
 
+pub enum FrameNeeded {}
+
+impl FrameNeeded {
+	pub const LAND_PUYO_ANIMATION: usize = 15;
+	pub const MOVE: usize = 2;
+	pub const SPAWN_NEW_PUYO: usize = 2;
+	pub const TEAR_PUYO_DROP_PER_1_BLOCK: usize = 2;
+	pub const VANISH_PUYO_ANIMATION: usize = 48;
+}
+
 //pub const OJAMA_RATE: [u8; 12] = [70, 52, 34, 25, 16, 12, 8, 6, 4, 3, 2, 1];
 
 pub const OJAMA_POS: [u8; 6] = [1, 2, 3, 4, 5, 6];
@@ -81,12 +91,13 @@ pub struct Env {
 	pub current_score: usize,
 	pub events: VecDeque<Event>,
 	pub ojama: OjamaStatus,
-	pub all_clear: bool,
+	pub all_cleared: bool,
 	pub dead: bool,
 	rng: ThreadRng,
 	bag: VecDeque<PuyoKind>,
 	rand: u32,
 	pub debug_status: DebugStatus,
+	pub ojama_rate: usize,
 }
 
 
@@ -102,13 +113,14 @@ impl Env {
 			current_score: 0,
 			events: VecDeque::new(),
 			ojama: OjamaStatus(0),
-			all_clear: false,
+			all_cleared: false,
 			//queue_rng: StdRng::seed_from_u64(*seed),
 			rng: thread_rng(),
 			dead: false,
 			bag: VecDeque::with_capacity(256),
 			rand: *seed,
 			debug_status: DebugStatus::new(),
+			ojama_rate: 70,
 		}
 	}
 
@@ -199,7 +211,7 @@ impl Env {
 		self.events.push_back(Event {
 			frame: self.current_frame,
 			kind: EventType::Wait,
-			value: 2,
+			value: FrameNeeded::SPAWN_NEW_PUYO,
 			value2: Default::default(),
 		});
 
@@ -229,7 +241,7 @@ impl Env {
 			self.events.push_back(Event {
 				frame: self.current_frame,
 				kind: EventType::Wait,
-				value: 2,
+				value: FrameNeeded::MOVE,
 				value2: Default::default(),
 			});
 		}
@@ -240,7 +252,7 @@ impl Env {
 			self.events.push_back(Event {
 				frame: self.current_frame,
 				kind: EventType::Wait,
-				value: 2,
+				value: FrameNeeded::MOVE,
 				value2: Default::default(),
 			});
 		}
@@ -257,7 +269,7 @@ impl Env {
 
 		let mut status = puyo_status.clone();
 
-		let d_combi = ROTATE_DIFF[rotation.value() as usize];
+		let d_combi = ROTATE_DIFF[rotation.0 as usize];
 		status.position_diff.x = d_combi[0];
 		status.position_diff.y = d_combi[1];
 
@@ -265,7 +277,7 @@ impl Env {
 			*kick = Vector2::new(0, 0);
 			return true;
 		} else {
-			let diff = ROTATE_KICKS[rotation.value() as usize];
+			let diff = ROTATE_KICKS[rotation.0 as usize];
 			//	if Self::is_valid_position(board, &mut status, diff[0], diff[1]) {
 			if Self::is_valid_position(board, &mut status, diff[0], diff[1]) {
 				*kick = Vector2::new(diff[0], diff[1]);
@@ -346,7 +358,6 @@ impl Env {
 		self.board.0[1] = _mm_load_si128(v2.0.as_ptr() as *const __m128i);
 		self.board.0[2] = _mm_load_si128(v3.0.as_ptr() as *const __m128i);
 		let mut heights = self.board.get_heights();
-		
 
 
 		for &pos in selected_columns {
@@ -370,7 +381,7 @@ impl Env {
 			self.events.push_back(Event {
 				frame: self.current_frame,
 				kind: EventType::Wait,
-				value: 2,
+				value: FrameNeeded::MOVE,
 				value2: Default::default(),
 			});
 			Self::rotate_puyo(&mut self.puyo_status, 1);
@@ -385,7 +396,7 @@ impl Env {
 			self.events.push_back(Event {
 				frame: self.current_frame,
 				kind: EventType::Wait,
-				value: 2,
+				value: FrameNeeded::MOVE,
 				value2: Default::default(),
 			});
 			Self::rotate_puyo(&mut self.puyo_status, 0);
@@ -399,7 +410,7 @@ impl Env {
 		self.events.push_back(Event {
 			frame: self.current_frame,
 			kind: EventType::Wait,
-			value: 2,
+			value: FrameNeeded::MOVE,
 			value2: Default::default(),
 		});
 		if self.puyo_status.rotation.0 == 3 {
@@ -412,6 +423,26 @@ impl Env {
 	#[inline]
 	pub unsafe fn update(&mut self) {
 		self.current_frame += 1;
+
+		let ojama_rate = match self.current_frame / 60 {
+			v if v <= 95 => { 70 }
+			v if v <= 111 => { 52 }
+			v if v <= 127 => { 34 }
+			v if v <= 143 => { 25 }
+			v if v <= 159 => { 16 }
+			v if v <= 175 => { 12 }
+			v if v <= 191 => { 8 }
+			v if v <= 207 => { 6 }
+			v if v <= 223 => { 4 }
+			v if v <= 239 => { 3 }
+			v if v <= 255 => { 2 }
+			v if v >= 256 => { 1 }
+			_ => { panic!() }
+		};
+
+		if self.ojama_rate != ojama_rate {
+			self.ojama_rate = ojama_rate;
+		}
 
 		/*	if self.events.len() != 0 {
 				let event = self.events.pop_front().unwrap();
@@ -432,14 +463,14 @@ impl Env {
 			self.events.push_back(Event {
 				frame: self.current_frame,
 				kind: EventType::Wait,
-				value: 2 * drop_count as usize,
+				value: FrameNeeded::TEAR_PUYO_DROP_PER_1_BLOCK * drop_count as usize,
 				value2: Default::default(),
 			});
 
 			self.events.push_back(Event {
 				frame: self.current_frame,
 				kind: EventType::Wait,
-				value: 15,//ぷよんっ
+				value: FrameNeeded::LAND_PUYO_ANIMATION,
 				value2: Default::default(),
 			});
 		}
@@ -448,7 +479,7 @@ impl Env {
 		let mut chain: u8 = 0;
 		let mut board_mask = BoardBit::default();
 
-		let mut chain_score: u32 = 0;
+		let mut chain_score: usize = 0;
 		let mut elapsed_frame = 0usize;
 		loop {
 			let score = self.board.erase_if_needed(chain as i32, &mut board_mask);
@@ -456,21 +487,21 @@ impl Env {
 				break;
 			}
 
-			if self.all_clear {
+			if self.all_cleared {
 				chain_score += 2100;
-				self.all_clear = false;
+				self.all_cleared = false;
 			}
 
 			self.events.push_back(Event {
 				frame: self.current_frame,
 				kind: EventType::Wait,
-				value: 48,//消えるアニメーしょん
+				value: FrameNeeded::VANISH_PUYO_ANIMATION,
 				value2: Default::default(),
 			});
-			elapsed_frame += 48;
+			elapsed_frame += FrameNeeded::VANISH_PUYO_ANIMATION;
 
 			self.current_score += score as usize;
-			chain_score += score;
+			chain_score += score as usize;
 
 			let drop_count = self.board.drop_after_erased(&board_mask);
 
@@ -479,18 +510,18 @@ impl Env {
 				self.events.push_back(Event {
 					frame: self.current_frame,
 					kind: EventType::Wait,
-					value: 2 * drop_count as usize,
+					value: FrameNeeded::TEAR_PUYO_DROP_PER_1_BLOCK * drop_count as usize,
 					value2: Default::default(),
 				});
-				elapsed_frame += 2 * drop_count as usize;
+				elapsed_frame += FrameNeeded::TEAR_PUYO_DROP_PER_1_BLOCK * drop_count as usize;
 
 				self.events.push_back(Event {
 					frame: self.current_frame,
 					kind: EventType::Wait,
-					value: 25,//ぷよんっ
+					value: FrameNeeded::VANISH_PUYO_ANIMATION,
 					value2: Default::default(),
 				});
-				elapsed_frame += 25;
+				elapsed_frame += FrameNeeded::VANISH_PUYO_ANIMATION;
 			}
 
 			chain += 1;
@@ -502,27 +533,11 @@ impl Env {
 							  &_mm_set_epi64x(0b1111111111111111000000000000000100000000000000010000000000000001u64 as i64,
 											  0b0000000000000001000000000000000100000000000000011111111111111111u64 as i64),
 							  &_mm_setzero_si128()) {
-			self.all_clear = true;
+			self.all_cleared = true;
 		}
 
 
-		let ojama_rate = match self.current_frame / 60 {
-			v if v <= 95 => { 70 }
-			v if v <= 111 => { 52 }
-			v if v <= 127 => { 34 }
-			v if v <= 143 => { 25 }
-			v if v <= 159 => { 16 }
-			v if v <= 175 => { 12 }
-			v if v <= 191 => { 8 }
-			v if v <= 207 => { 6 }
-			v if v <= 223 => { 4 }
-			v if v <= 239 => { 3 }
-			v if v <= 255 => { 2 }
-			v if v >= 256 => { 1 }
-			_ => { panic!() }
-		};
-
-		let mut attack: usize = (chain_score / ojama_rate) as usize;
+		let mut attack: usize = (chain_score / self.ojama_rate) as usize;
 		attack = self.ojama.offset(attack);
 
 		if attack != 0 {
@@ -561,7 +576,7 @@ impl Env {
 
 		//後の位置でkickset判断
 
-		let d_combi = ROTATE_DIFF[puyo_status.rotation.value() as usize];
+		let d_combi = ROTATE_DIFF[puyo_status.rotation.0 as usize];
 		puyo_status.position_diff.x = d_combi[0];
 		puyo_status.position_diff.y = d_combi[1];
 	}

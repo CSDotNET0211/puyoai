@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use env::board::Board;
 use env::board_bit::BoardBit;
-use env::env::{DEAD_POSITION, Env, SPAWN_POS};
+use env::env::{DEAD_POSITION, Env, FrameNeeded, SPAWN_POS};
 use env::ojama_status::OjamaStatus;
 use env::puyo_kind::PuyoKind;
 use env::puyo_status::PuyoStatus;
@@ -46,7 +46,7 @@ impl<E: Evaluator> AI<E> {
 		}
 	}
 
-	pub unsafe fn search(&mut self, board: &Board, current: &PuyoStatus, next: &Vec<PuyoKind>, ojama: &OjamaStatus, center_puyo: PuyoKind, movable_puyo: PuyoKind) {
+	pub unsafe fn search(&mut self, board: &Board, current: &PuyoStatus, next: &Vec<PuyoKind>, ojama: &OjamaStatus, center_puyo: PuyoKind, movable_puyo: PuyoKind, all_cleared: bool, ojama_rate: &usize) {
 		//let debug = board.get_not_empty_board();
 		self.best_move = Option::from(AIMove::new(-999., vec![Drop]));
 		//self.best_move = None;
@@ -60,7 +60,7 @@ impl<E: Evaluator> AI<E> {
 			return;;
 		}*/
 
-		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0);
+		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate);
 
 		if let Some(pos) = self.best_move.as_mut().unwrap().path.iter().position(|&x| x == Drop) {
 			let mut new = self.best_move.clone().unwrap().path;
@@ -76,10 +76,12 @@ impl<E: Evaluator> AI<E> {
 							  center_puyo: PuyoKind,
 							  movable_puyo: PuyoKind,
 							  movements: &Vec<KeyType>,
-							  elapsed_frame: usize,
+							  mut elapsed_frame: usize,
 							  score: usize,
+							  mut all_cleared: bool,
+							  ojama_rate: &usize,
 	) {
-		let mut places: HashMap<u32, (u8, PuyoStatus)> = HashMap::new();
+		let mut places: HashMap<u16, (u8, PuyoStatus)> = HashMap::new();
 		let mut hash_position = HashMap::new();
 		Self::get_put_places(&board, &current, &mut hash_position, 0, &mut places, &(center_puyo as u8), &(movable_puyo as u8));
 
@@ -89,13 +91,12 @@ impl<E: Evaluator> AI<E> {
 
 			new_board.put_puyo(&place.1.1, &center_puyo, &movable_puyo);
 
-		//	self.ojama.offset((chain_score / ojama_rate) as usize);
-		/*	if ojama.get_receivable_ojama_size()!=0{
-				ojama.
-			}*/
-//お邪魔降らせて
+			//	self.ojama.offset((chain_score / ojama_rate) as usize);
+			/*	if ojama.get_receivable_ojama_size()!=0{
+					ojama.
+				}*/
+			//TODO: お邪魔降らせて
 
-			//TODO:全部continueの場合は？
 			if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				continue;
 			}
@@ -122,16 +123,21 @@ impl<E: Evaluator> AI<E> {
 								 &_mm_set_epi64x(0b1111111111111111000000000000000100000000000000010000000000000001u64 as i64,
 												 0b0000000000000001000000000000000100000000000000011111111111111111u64 as i64),
 								 &_mm_setzero_si128()) {
+				all_cleared = true;
+			}
+
+			if all_cleared {
 				new_score += 2100;
+				all_cleared = false;
 			}
 
 
-			let movement = Self::calculate_move(&hash_position, &place.1.1, current.position.x, current.position.y, current.rotation);
-			let mut new_movements = movements.clone();
-			new_movements.extend(movement);
-//連鎖を実行 所要時間、火力、地形変更度
+			let calculated_movement = Self::calculate_move(&hash_position, &place.1.1, current.position.x, current.position.y, current.rotation);
 
-		
+			elapsed_frame += calculated_movement.len() * FrameNeeded::MOVE;
+
+			let mut new_movements = movements.clone();
+			new_movements.extend(calculated_movement);
 
 
 			//path
@@ -144,13 +150,13 @@ impl<E: Evaluator> AI<E> {
 				let new_movable_puyo = new_next.pop().unwrap();
 
 				//経過フレームとか生成火力を引き継ぐ
-				self.search_internal(&new_board, &new_current, &new_next, &ojama.clone(), new_center_puyo, new_movable_puyo, &new_movements, 0, new_score);
+				self.search_internal(&new_board, &new_current, &new_next, &ojama.clone(), new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate);
 			} else {
 				//leaf
 				//
 
 				let mut debug = Debug::new();
-				let eval = self.evaluator.evaluate(&new_board, &new_score, &0, &mut debug,ojama);
+				let eval = self.evaluator.evaluate(&new_board, &new_score, &0, &mut debug, ojama,ojama_rate);
 
 				//highest_evalよりも評価が高かったら、計算したpath、
 				if self.best_move == None || self.best_move.as_ref().unwrap().eval < eval {
@@ -164,7 +170,7 @@ impl<E: Evaluator> AI<E> {
 
 	pub fn calculate_move(hash_position: &HashMap<u16, Path>, puyo_status: &PuyoStatus, x: i8, y: i8, rotation: Rotation) -> Vec<KeyType> {
 		//TODO: こういうvecとかなんとか
-		let mut vec = vec![KeyType::Drop];
+		let mut vec = vec![Drop];
 		let mut new_puyo_status = puyo_status.clone();
 
 		loop {
@@ -241,7 +247,7 @@ impl<E: Evaluator> AI<E> {
 							 puyo_status: &PuyoStatus,
 							 mut hash_position: &mut HashMap<u16, Path>,
 							 move_count: u8,
-							 mut results: &mut HashMap<u32, (u8, PuyoStatus)>,
+							 mut results: &mut HashMap<u16, (u8, PuyoStatus)>,
 							 center_puyo: &u8,
 							 movable_puyo: &u8,
 	) {
@@ -404,16 +410,19 @@ impl<E: Evaluator> AI<E> {
 		//この検索時点での最速だからおかしくなる、
 		{
 			let new_puyo_status = puyo_status.clone();
-			//TODO:
-			//hashの位置も保存、ただしy座標はいらん、それで最速
-			//xyypxyyp
-			//x0000000
-			//		let hash = *center_puyo as u32 + 10 * puyo_status.position.y as u32 + 1000 * puyo_status.position.x as u32
-			//			+ 10000 * *movable_puyo as u32 + 100000 * (puyo_status.position.y + puyo_status.position_diff.y) as u32 + 10000000 * (puyo_status.position.x + puyo_status.position_diff.x) as u32;
-//TODO: 小さい順
 
-			let hash = *center_puyo as u32 + 10 * 0 + 1000 * puyo_status.position.x as u32
-				+ 10000 * *movable_puyo as u32 + 100000 * 0 as u32 + 10000000 * (puyo_status.position.x + puyo_status.position_diff.x) as u32;
+			//TODO: 小さい順
+
+			/*	let hash = *center_puyo as u32 + 10 * 0 + 1000 * puyo_status.position.x as u32
+					+ 10000 * *movable_puyo as u32 + 100000 * 0 as u32 + 10000000 * (puyo_status.position.x + puyo_status.position_diff.x) as u32;
+	*/
+
+			let mut hash: u16 = 0;
+
+			hash |= (*center_puyo as u16 & 0b111) << 0;
+			hash |= (*movable_puyo as u16 & 0b111) << 3;
+			hash |= (puyo_status.position.x as u16 & 0b111) << 6;
+			hash |= ((puyo_status.position.x + puyo_status.position_diff.x) as u16 & 0b111) << 9;
 
 
 			let data = results.entry(hash);

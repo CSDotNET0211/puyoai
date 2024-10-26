@@ -29,7 +29,7 @@ pub struct NNEvaluator<T: NeuralNetwork> {
 
 
 impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
-	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus) -> f32 {
+	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize) -> f32 {
 		unsafe {
 			if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				debug.dead = true;
@@ -37,6 +37,7 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 			}
 		}
 
+		let ojama_count_in_board = unsafe { board.get_bits(PuyoKind::Ojama).popcnt128() };
 //		let mut key = IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
 		let height = unsafe { board.get_heights() };
 		let virtual_ignites: BTreeMap<u32, IgniteKey> = BTreeMap::new();
@@ -47,7 +48,7 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 
 		unsafe {
 			for color_puyo in COLOR_PUYOS {
-				let mask = board.get_bits(color_puyo)/*.mask_board_12()*/;
+				let mask = board.get_bits(color_puyo).mask_board_12();
 				Self::find_links(&mask, &mut link2, &mut link3);
 			}
 		}
@@ -71,21 +72,21 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 		debug.link3_count = link3;
 		//	debug.ignite_count = key.ignite_count as i32;
 		//	debug.attack = key.score as i32;
-		let virtual_ignite_top3: Vec<_> = virtual_ignites.iter().rev().take(3).collect();
-		let mut top1 = &IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
-		let mut top2 = &IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
-		let mut top3 = &IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
+		//let virtual_ignite_top3: Vec<_> = virtual_ignites.iter().rev().take(3).collect();
+		//	let mut top1 = &IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
+		//	let mut top2 = &IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
+		//	let mut top3 = &IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
 
 
-		if virtual_ignite_top3.len() >= 1 {
-			top1 = virtual_ignite_top3[0].1;
-		}
-		if virtual_ignite_top3.len() >= 2 {
-			top2 = virtual_ignite_top3[1].1;
-		}
-		if virtual_ignite_top3.len() >= 3 {
-			top3 = virtual_ignite_top3[2].1;
-		}
+		/*	if virtual_ignite_top3.len() >= 1 {
+				top1 = virtual_ignite_top3[0].1;
+			}
+			if virtual_ignite_top3.len() >= 2 {
+				top2 = virtual_ignite_top3[1].1;
+			}
+			if virtual_ignite_top3.len() >= 3 {
+				top3 = virtual_ignite_top3[2].1;
+			}*/
 
 
 		let mut highest_template_score = 0;
@@ -98,25 +99,27 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 			}
 		}
 
-		let raw_ojama = unsafe { ojama.get_raw() };
+		//全消し状態はスコアとして
+		//相殺した後のお邪魔と送る火力+2
+		//連鎖の位置平均を算出し、前連鎖との距離の合計
+		//盤面のお邪魔数+1
+		//毎フレーム更新される相手の盤面情報　仮想発火の連鎖数、ありうる最大の連鎖数、
+		//置いたぷよの
+		let ojama_size = unsafe { ojama.get_all_ojama_size() };
+//12 + 2 + 1 + 3 + 2 = 20
 		let result = self.neuralnetwork.compute(&[
 			link2 as f32,
 			link3 as f32,
-			top1.ignite_count as f32,
-			top1.score as f32,
-			top2.ignite_count as f32,
-			top2.score as f32,
-			top3.ignite_count as f32,
-			top3.score as f32,
 			*score as f32,
+			*elapse_frame as f32,
 			height[DEAD_POSITION.x as usize] as f32,
 			bumpness as f32,
 			height_sum as f32,
 			highest_template_score as f32,
-			raw_ojama[0] as f32,
-			raw_ojama[1] as f32,
-			raw_ojama[2] as f32,
-			raw_ojama[3] as f32,
+			ojama_size as f32,
+			unsafe { ojama.get_time_to_receive() } as f32,
+			(ojama_size as isize - (*score / *ojama_rate) as isize) as f32,
+			ojama_count_in_board as f32
 		]);
 
 		result[0]
