@@ -5,6 +5,6 @@ pub mod board_bit;
 pub mod board;
 pub mod vector2;
 pub mod puyo_kind;
-mod split_board;
+pub mod split_board;
 pub mod event_type;
 pub mod ojama_status;

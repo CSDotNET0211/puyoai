@@ -4,23 +4,23 @@ use std::io::Error;
 use std::io::Write;
 use crate::path::Path;
 
-#[derive(Debug,Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Debug {
-	pub link2_count: i32,
-	pub link3_count: i32,
-	pub ignite_count: i32,
-	pub attack: i32,
-	pub dead:bool
+	pub link2_count: u32,
+	pub link3_count: u32,
+	pub ignite_count: u32,
+	pub attack: usize,
+	pub dead: bool,
 }
 
 impl Debug {
 	pub fn new() -> Debug {
 		Debug {
-			link2_count: -1,
-			link3_count: -1,
-			ignite_count: -1,
-			attack: -1,
-			dead:false
+			link2_count: 0,
+			link3_count: 0,
+			ignite_count: 0,
+			attack: 0,
+			dead: false,
 		}
 	}
 

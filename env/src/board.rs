@@ -1,7 +1,11 @@
 ﻿use std::arch::x86_64::{__m128i, _mm_and_si128, _mm_andnot_si128, _mm_cmpeq_epi32, _mm_cmpeq_epi64, _mm_load_si128, _mm_or_si128, _mm_set_epi64x, _mm_setzero_si128, _mm_store_si128, _mm_test_all_ones, _pext_u32, _popcnt32};
 use std::mem;
+use rand::prelude::SliceRandom;
+use rand::rngs::ThreadRng;
 
 use crate::board_bit::BoardBit;
+use crate::env::{MAX_OJAMA_RECEIVE_COUNT, OJAMA_POS};
+use crate::ojama_status::OjamaStatus;
 use crate::puyo_kind::PuyoKind;
 use crate::puyo_status::PuyoStatus;
 use crate::split_board::SplitBoard;
@@ -107,11 +111,20 @@ impl Board {
 		self.set_flag(x as i8, board_filled_count as i8, puyo);
 	}
 
+	///指定したxの高さの場所に上書きします
+	#[inline]
+	pub unsafe fn put_puyo_direct(&mut self, x: u8, heights: &mut [u16; 8], puyo: &PuyoKind) {
+		let height = heights[x as usize];
+
+		self.set_flag(x as i8, height as i8, puyo);
+		heights[x as usize] += 1;
+	}
+
 	#[inline]
 	pub unsafe fn get_heights(&self) -> [u16; 8] {
 		let mut heights: [u16; 8] = [0; 8];
 		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.get_not_empty_board().0);
+		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.get_not_empty_board().mask_board_13().0);
 
 		for i in 0..8 {
 			heights[i] = _popcnt32(board_split_aligned.0[i] as i32) as u16;
@@ -120,19 +133,75 @@ impl Board {
 		heights
 	}
 
-/*	#[inline]
-	pub unsafe fn set_heights(v1: &SplitBoard, v2: &SplitBoard, v3: &SplitBoard, heights: &mut [u16; 8]) {
-		//let mut heights: [u16; 8] = [0; 8];
-		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-		//	_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.get_not_empty_board().0);
+	/*	#[inline]
+		pub unsafe fn set_heights(v1: &SplitBoard, v2: &SplitBoard, v3: &SplitBoard, heights: &mut [u16; 8]) {
+			//let mut heights: [u16; 8] = [0; 8];
+			let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
+			//	_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.get_not_empty_board().0);
+	
+			//すでにsplitboardだから、
+			Self::get_not_empty_board_1(&(), &(), &())
+	
+			for i in 0..8 {
+				heights[i] = _popcnt32(board_split_aligned.0[i] as i32) as u16;
+			}
+		}*/
 
-		//すでにsplitboardだから、
-		Self::get_not_empty_board_1(&(), &(), &())
+	#[inline]
+	pub unsafe fn try_put_ojama(&mut self, ojama: &mut OjamaStatus, rng: &mut ThreadRng) {
+		//TODO: 全体的にマジックナンバー何とかしろ、あとお邪魔ってマスクとかいるよね？14
+		let mut ojama_to_receive = ojama.get_receivable_ojama_size();
 
-		for i in 0..8 {
-			heights[i] = _popcnt32(board_split_aligned.0[i] as i32) as u16;
+		if ojama_to_receive > MAX_OJAMA_RECEIVE_COUNT {
+			ojama_to_receive = MAX_OJAMA_RECEIVE_COUNT;
 		}
-	}*/
+		ojama.use_ojama(ojama_to_receive);
+
+		let mut heights = self.get_heights();
+
+		let row = ojama_to_receive / crate::env::WIDTH;
+
+		//お邪魔用のbitを作成し、状態を上書きする。
+		let ojama_mask_column_size: u16 = (1 << row) - 1;
+
+		let mut v1: SplitBoard = SplitBoard([0; 8]);
+		let mut v2: SplitBoard = SplitBoard([0; 8]);
+		let mut v3: SplitBoard = SplitBoard([0; 8]);
+		_mm_store_si128(v1.0.as_mut_ptr() as *mut __m128i, self.0[0]);
+		_mm_store_si128(v2.0.as_mut_ptr() as *mut __m128i, self.0[1]);
+		_mm_store_si128(v3.0.as_mut_ptr() as *mut __m128i, self.0[2]);
+
+
+		for x in 1..=6 {
+			//現在の高さ分shift
+			let ojama_mask_column = ojama_mask_column_size.wrapping_shl(heights[x] as u32);
+			BoardBit::set_bit_true_column(&mut v1.0[x], &ojama_mask_column);
+			BoardBit::set_bit_false_column(&mut v2.0[x], &ojama_mask_column);
+			BoardBit::set_bit_false_column(&mut v3.0[x], &ojama_mask_column);
+		}
+
+		let ojama_pos_slice = &OJAMA_POS;  // Borrow the slice here to extend its lifetime
+		let selected_columns = ojama_pos_slice.choose_multiple(rng, (ojama_to_receive % crate::env::WIDTH));
+
+		self.0[0] = _mm_load_si128(v1.0.as_ptr() as *const __m128i);
+		self.0[1] = _mm_load_si128(v2.0.as_ptr() as *const __m128i);
+		self.0[2] = _mm_load_si128(v3.0.as_ptr() as *const __m128i);
+		let mut heights = self.get_heights();
+
+
+		for &pos in selected_columns {
+			let ojama_mask_column = 1u16.wrapping_shl(heights[pos as usize] as u32);
+
+			BoardBit::set_bit_true_column(&mut v1.0[pos as usize], &ojama_mask_column);
+			BoardBit::set_bit_false_column(&mut v2.0[pos as usize], &ojama_mask_column);
+			BoardBit::set_bit_false_column(&mut v3.0[pos as usize], &ojama_mask_column);
+		}
+
+		self.0[0] = _mm_load_si128(v1.0.as_ptr() as *const __m128i);
+		self.0[1] = _mm_load_si128(v2.0.as_ptr() as *const __m128i);
+		self.0[2] = _mm_load_si128(v3.0.as_ptr() as *const __m128i);
+	}
+
 
 	#[inline]
 	pub unsafe fn set_flag(&mut self, x: i8, y: i8, puyo_kind: &PuyoKind) {
@@ -228,10 +297,9 @@ impl Board {
 
 	#[inline]
 	pub unsafe fn is_same(&self, v1: &__m128i, v2: &__m128i, v3: &__m128i) -> bool {
-		//TODO: ガチで負荷削減するなら配列使う?
-		if _mm_test_all_ones(_mm_cmpeq_epi32(self.0[0], *v1)) == 1 &&
-			_mm_test_all_ones(_mm_cmpeq_epi32(self.0[1], *v2)) == 1 &&
-			_mm_test_all_ones(_mm_cmpeq_epi32(self.0[2], *v3)) == 1 {
+		if (_mm_test_all_ones(_mm_cmpeq_epi32(self.0[0], *v1)) &
+			_mm_test_all_ones(_mm_cmpeq_epi32(self.0[1], *v2)) &
+			_mm_test_all_ones(_mm_cmpeq_epi32(self.0[2], *v3))) == 1 {
 			return true;
 		};
 		false
@@ -294,7 +362,7 @@ impl Board {
 		self.get_bits(PuyoKind::Empty).get_1_flag((x * HEIGHT_WITH_BORDER as i16 + y) as i8)
 	}
 	#[inline]
-	pub unsafe fn erase_if_needed(&self, count_chain: i32, erased_flag: &mut BoardBit) -> u32 {
+	pub unsafe fn erase_if_needed(&self, chain_count: &u8, erased_flag: &mut BoardBit) -> u32 {
 		erased_flag.0 = _mm_setzero_si128();
 
 		let mut color_count = 0;
@@ -335,7 +403,7 @@ impl Board {
 
 		let color_bonus = Self::get_color_bonus(&color_count);
 		let chain_bonus = Self::get_chain_bonus(
-			&(count_chain as u8 + if color_count == 0 { 0 } else { 1 }));
+			&(*chain_count + if color_count == 0 { 0 } else { 1 }));
 
 		let ojama_erased = erased_flag.expand_edge().mask(&self.get_bits(PuyoKind::Ojama)/*.mask_board_12()*/);
 		erased_flag.set_all(&ojama_erased);
@@ -366,7 +434,6 @@ impl Board {
 		for i in 0..3 {
 			_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.0[i]);
 
-			//TODO:チェック
 			for split_index in 0..mask_split_aligned.0.len() {
 				if drop_count < _popcnt32(mask_split_aligned.0[split_index] as i32) as u8 {
 					drop_count = _popcnt32(mask_split_aligned.0[split_index] as i32) as u8;

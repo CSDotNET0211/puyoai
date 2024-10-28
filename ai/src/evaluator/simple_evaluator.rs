@@ -21,11 +21,12 @@ pub struct SimpleEvaluator {
 }
 
 impl Evaluator for SimpleEvaluator {
-	fn evaluate(&mut self, board: &Board, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize) -> f32 {
+	fn evaluate(&mut self, board: &Board, sim_board: &Board, chain: &u8, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize) -> f32 {
+		panic!();
 		//	Console::print_board(&board);
 		let mut result = 0.;
 		unsafe {
-			if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
+			if !sim_board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				debug.dead = true;
 				return f32::MIN;
 			}
@@ -97,7 +98,7 @@ impl Evaluator for SimpleEvaluator {
 		//相手の状況なども
 		//let mut keys = Vec::new();
 		let mut key = IgniteKey::new(PuyoKind::Empty, 0, 0, 0, 0);
-		unsafe { Self::calc_num_of_key_puyos(&board, &mut key); }
+		unsafe { Self::calc_num_of_key_puyos(&sim_board, &mut key); }
 
 		//keysを使ってそれぞれの起こりうる連鎖を評価
 		//選ぶのはニューラルネットワーク？	いやさすがに無理、防御ならお邪魔を減らすことの重みが強い、攻撃なら
@@ -121,7 +122,7 @@ impl Evaluator for SimpleEvaluator {
 
 		unsafe {
 			for color_puyo in COLOR_PUYOS {
-				let mask = board.get_bits(color_puyo)/*.mask_board_12()*/;
+				let mask = sim_board.get_bits(color_puyo)/*.mask_board_12()*/;
 				Self::find_links(&mask, &mut link2, &mut link3);
 			}
 		}
@@ -133,13 +134,13 @@ impl Evaluator for SimpleEvaluator {
 		result += key.score as f32 * self.weight[3];
 		result += *score as f32 * self.weight[4];
 
-		let height = unsafe { board.get_heights() };
+		let height = unsafe { sim_board.get_heights() };
 		result += height[DEAD_POSITION.x as usize] as f32 * self.weight[5];
 
 		let mut bumpness = 0;
 		let mut height_sum = 0;
 		unsafe {
-			let heights = board.get_heights();
+			let heights = sim_board.get_heights();
 			for x in 1..6 {
 				bumpness += (heights[x] as i16 - heights[x + 1] as i16).abs();
 			}
@@ -151,11 +152,6 @@ impl Evaluator for SimpleEvaluator {
 
 		result += bumpness as f32 * self.weight[6];
 		result += height_sum as f32 * self.weight[7];
-
-		debug.link2_count = link2;
-		debug.link3_count = link3;
-		debug.ignite_count = key.ignite_count as i32;
-		debug.attack = key.score as i32;
 
 
 //		(link2 * 2 + link3 * 5) as f32
@@ -182,7 +178,6 @@ impl SimpleEvaluator {
 		//それぞれの列に1~3置いて可能性のある連鎖を列挙 6列*3通り
 		//それぞれの列に横で2~3個置いて可能性のある連鎖を列挙 5通り+4通り
 
-		//縦 TODO:数要検討
 		for puyo_type in PUYOS {
 			for puyo_count in 1..=2 {
 				for x in 1..WIDTH_WITH_BORDER - 1 {
@@ -193,11 +188,11 @@ impl SimpleEvaluator {
 						new_board.put_puyo_1(x, &puyo_type);
 					}
 
-					let mut chain: i32 = 0;
+					let mut chain: u8 = 0;
 					let mut score = 0;
 					let mut board_mask = BoardBit::default();
 					loop {
-						let temp_score = new_board.erase_if_needed(chain, &mut board_mask);
+						let temp_score = new_board.erase_if_needed(&chain, &mut board_mask);
 						if temp_score == 0 {
 							break;
 						}

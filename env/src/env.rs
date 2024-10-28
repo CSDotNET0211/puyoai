@@ -37,10 +37,9 @@ impl FrameNeeded {
 	pub const VANISH_PUYO_ANIMATION: usize = 48;
 }
 
-//pub const OJAMA_RATE: [u8; 12] = [70, 52, 34, 25, 16, 12, 8, 6, 4, 3, 2, 1];
-
+pub const ALL_CLEAR_BONUS: usize = 2100;
 pub const OJAMA_POS: [u8; 6] = [1, 2, 3, 4, 5, 6];
-
+pub const MAX_OJAMA_RECEIVE_COUNT: usize = 30;
 
 pub const TEAR_FRAME: [u8; 14] = [0, 19, 24, 28, 31, 34, 37, 40, 42, 44, 46, 48, 48, 48];
 pub const ROTATE_DIFF: [[i8; 2]; 4] = [
@@ -196,13 +195,10 @@ impl Env {
 	pub unsafe fn create_new_puyo(&mut self) {
 		self.debug_status.current_chain_count = 0;
 
-		//相殺、お邪魔レート考慮されてない
 		if self.ojama.get_receivable_ojama_size() != 0 {
-			self.try_put_ojama();
+			self.board.try_put_ojama(&mut self.ojama, &mut self.rng);
 		}
 
-
-		//if self.board[DEAD_POSITION.x as usize + DEAD_POSITION.y as usize * WIDTH] != PuyoKind::Empty {
 		if !self.board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 			self.dead = true;
 			return;
@@ -316,65 +312,6 @@ impl Env {
 	}
 
 	#[inline]
-	pub unsafe fn try_put_ojama(&mut self) {
-		//一度に30個まで
-		//TODO: 全体的にマジックナンバー何とかしろ、あとお邪魔ってマスクとかいるよね？14
-		//offsetを使って使ったお邪魔を減らす
-		let mut ojama_to_receive = self.ojama.get_receivable_ojama_size();
-
-
-		if ojama_to_receive > 30 {
-			ojama_to_receive = 30;
-		}
-		self.ojama.use_ojama(ojama_to_receive);
-
-		let mut heights = self.board.get_heights();
-
-		let row = ojama_to_receive / 6;
-
-		//お邪魔用のbitを作成し、状態を上書きする。
-		let ojama_mask_column_size: u16 = (1 << row) - 1;
-
-		let mut v1: SplitBoard = SplitBoard([0; 8]);
-		let mut v2: SplitBoard = SplitBoard([0; 8]);
-		let mut v3: SplitBoard = SplitBoard([0; 8]);
-		_mm_store_si128(v1.0.as_mut_ptr() as *mut __m128i, self.board.0[0]);
-		_mm_store_si128(v2.0.as_mut_ptr() as *mut __m128i, self.board.0[1]);
-		_mm_store_si128(v3.0.as_mut_ptr() as *mut __m128i, self.board.0[2]);
-
-
-		for x in 1..=6 {
-			//現在の高さ分shift
-			let ojama_mask_column = ojama_mask_column_size.wrapping_shl(heights[x] as u32);
-			BoardBit::set_bit_true_column(&mut v1.0[x], &ojama_mask_column);
-			BoardBit::set_bit_false_column(&mut v2.0[x], &ojama_mask_column);
-			BoardBit::set_bit_false_column(&mut v3.0[x], &ojama_mask_column);
-		}
-
-		let ojama_pos_slice = &OJAMA_POS;  // Borrow the slice here to extend its lifetime
-		let selected_columns = ojama_pos_slice.choose_multiple(&mut self.rng, (ojama_to_receive % 30) as usize);
-
-		self.board.0[0] = _mm_load_si128(v1.0.as_ptr() as *const __m128i);
-		self.board.0[1] = _mm_load_si128(v2.0.as_ptr() as *const __m128i);
-		self.board.0[2] = _mm_load_si128(v3.0.as_ptr() as *const __m128i);
-		let mut heights = self.board.get_heights();
-
-
-		for &pos in selected_columns {
-			let ojama_mask_column = 1u16.wrapping_shl(heights[pos as usize] as u32);
-
-			BoardBit::set_bit_true_column(&mut v1.0[pos as usize], &ojama_mask_column);
-			BoardBit::set_bit_false_column(&mut v2.0[pos as usize], &ojama_mask_column);
-			BoardBit::set_bit_false_column(&mut v3.0[pos as usize], &ojama_mask_column);
-		}
-
-
-		self.board.0[0] = _mm_load_si128(v1.0.as_ptr() as *const __m128i);
-		self.board.0[1] = _mm_load_si128(v2.0.as_ptr() as *const __m128i);
-		self.board.0[2] = _mm_load_si128(v3.0.as_ptr() as *const __m128i);
-	}
-
-	#[inline]
 	pub unsafe fn rotate_cw(&mut self) {
 		let mut kick = Vector2::new(0, 0);
 		if Self::is_valid_rotation(&self.puyo_status, &self.board, false, &mut kick) {
@@ -482,13 +419,13 @@ impl Env {
 		let mut chain_score: usize = 0;
 		let mut elapsed_frame = 0usize;
 		loop {
-			let score = self.board.erase_if_needed(chain as i32, &mut board_mask);
+			let score = self.board.erase_if_needed(&chain, &mut board_mask);
 			if score == 0 {
 				break;
 			}
 
 			if self.all_cleared {
-				chain_score += 2100;
+				chain_score += ALL_CLEAR_BONUS;
 				self.all_cleared = false;
 			}
 

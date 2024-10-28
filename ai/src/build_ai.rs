@@ -1,10 +1,12 @@
 ﻿use std::arch::x86_64::{_mm_set_epi64x, _mm_setzero_si128};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use rand::rngs::ThreadRng;
+use rand::thread_rng;
 
 use env::board::Board;
 use env::board_bit::BoardBit;
-use env::env::{DEAD_POSITION, Env, FrameNeeded, SPAWN_POS};
+use env::env::{ALL_CLEAR_BONUS, DEAD_POSITION, Env, FrameNeeded, SPAWN_POS};
 use env::ojama_status::OjamaStatus;
 use env::puyo_kind::PuyoKind;
 use env::puyo_status::PuyoStatus;
@@ -60,7 +62,9 @@ impl<E: Evaluator> AI<E> {
 			return;;
 		}*/
 
-		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate);
+		let mut rng = thread_rng();
+
+		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate, &mut rng);
 
 		if let Some(pos) = self.best_move.as_mut().unwrap().path.iter().position(|&x| x == Drop) {
 			let mut new = self.best_move.clone().unwrap().path;
@@ -80,54 +84,52 @@ impl<E: Evaluator> AI<E> {
 							  score: usize,
 							  mut all_cleared: bool,
 							  ojama_rate: &usize,
+							  rng: &mut ThreadRng,
 	) {
 		let mut places: HashMap<u16, (u8, PuyoStatus)> = HashMap::new();
 		let mut hash_position = HashMap::new();
 		Self::get_put_places(&board, &current, &mut hash_position, 0, &mut places, &(center_puyo as u8), &(movable_puyo as u8));
 
 		for place in places {
-			//boardのコピーに適用して評価関数に
+			///操作ミノを適用しただけの盤面
 			let mut new_board = board.clone();
-
 			new_board.put_puyo(&place.1.1, &center_puyo, &movable_puyo);
-
-			//	self.ojama.offset((chain_score / ojama_rate) as usize);
-			/*	if ojama.get_receivable_ojama_size()!=0{
-					ojama.
-				}*/
-			//TODO: お邪魔降らせて
-
-			if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
+			///連鎖、落下のシミュレーションを実行した盤面
+			let mut new_board_sim = new_board.clone();
+			let mut ojama_clone = ojama.clone();
+			if ojama_clone.get_receivable_ojama_size() != 0 {
+				new_board_sim.try_put_ojama(&mut ojama_clone, rng);
+			}
+			if !new_board_sim.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				continue;
 			}
 
 			let mut new_score = score;
-			let mut chain = 0;
-
+			let mut chain = 0u8;
 
 			let mut erase_mask = BoardBit::default();
 			loop {
-				let temp_score = new_board.erase_if_needed(chain, &mut erase_mask);
+				let temp_score = new_board_sim.erase_if_needed(&chain, &mut erase_mask);
 				if temp_score == 0 {
 					break;
 				}
 
-				new_board.drop_after_erased(&erase_mask);
+				new_board_sim.drop_after_erased(&erase_mask);
 
 
 				chain += 1;
 				new_score += temp_score as usize;
 			}
 
-			if new_board.is_same(&_mm_setzero_si128(),
-								 &_mm_set_epi64x(0b1111111111111111000000000000000100000000000000010000000000000001u64 as i64,
-												 0b0000000000000001000000000000000100000000000000011111111111111111u64 as i64),
-								 &_mm_setzero_si128()) {
+			if new_board_sim.is_same(&_mm_setzero_si128(),
+									 &_mm_set_epi64x(0b1111111111111111000000000000000100000000000000010000000000000001u64 as i64,
+													 0b0000000000000001000000000000000100000000000000011111111111111111u64 as i64),
+									 &_mm_setzero_si128()) {
 				all_cleared = true;
 			}
 
 			if all_cleared {
-				new_score += 2100;
+				new_score += ALL_CLEAR_BONUS;
 				all_cleared = false;
 			}
 
@@ -150,13 +152,10 @@ impl<E: Evaluator> AI<E> {
 				let new_movable_puyo = new_next.pop().unwrap();
 
 				//経過フレームとか生成火力を引き継ぐ
-				self.search_internal(&new_board, &new_current, &new_next, &ojama.clone(), new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate);
+				self.search_internal(&new_board_sim, &new_current, &new_next, &ojama_clone, new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate, rng);
 			} else {
-				//leaf
-				//
-
 				let mut debug = Debug::new();
-				let eval = self.evaluator.evaluate(&new_board, &new_score, &0, &mut debug, ojama,ojama_rate);
+				let eval = self.evaluator.evaluate(&new_board, &new_board_sim, &chain, &new_score, &0, &mut debug, &ojama_clone, ojama_rate);
 
 				//highest_evalよりも評価が高かったら、計算したpath、
 				if self.best_move == None || self.best_move.as_ref().unwrap().eval < eval {
@@ -251,10 +250,8 @@ impl<E: Evaluator> AI<E> {
 							 center_puyo: &u8,
 							 movable_puyo: &u8,
 	) {
-		//r x1 y1y1 x2 y2y2のハッシュ値でそこまでの操作オーバーライド
-		//ひとつ前の操作だけ持ってる
 		let mut key;
-//TODO: 最初に到達チェックできないかな？
+		//TODO: 最初に到達チェックできないかな？
 
 		//右移動
 		//さきにhash調べたほうがパフォーンス良さそう
@@ -410,12 +407,6 @@ impl<E: Evaluator> AI<E> {
 		//この検索時点での最速だからおかしくなる、
 		{
 			let new_puyo_status = puyo_status.clone();
-
-			//TODO: 小さい順
-
-			/*	let hash = *center_puyo as u32 + 10 * 0 + 1000 * puyo_status.position.x as u32
-					+ 10000 * *movable_puyo as u32 + 100000 * 0 as u32 + 10000000 * (puyo_status.position.x + puyo_status.position_diff.x) as u32;
-	*/
 
 			let mut hash: u16 = 0;
 
