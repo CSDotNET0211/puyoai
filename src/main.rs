@@ -74,7 +74,7 @@ fn main() {
 				.read_line(&mut input)
 				.unwrap();
 	*/
-		input = "4".parse().unwrap();
+		input = "5".parse().unwrap();
 
 		match input.trim() {
 			"1" => {}

@@ -55,25 +55,25 @@ impl Board {
 		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, board);
 
 
-		let puyo_center_x = puyo_status.position.x;
-		let puyo_center_y = puyo_status.position.y;
-		let puyo_movable_x = puyo_status.position.x + puyo_status.position_diff.x;
-		let puyo_movable_y = puyo_status.position.y + puyo_status.position_diff.y;
+		let puyo_center_x = puyo_status.position.x as u8;
+		let puyo_center_y = puyo_status.position.y as u8;
+		let puyo_movable_x = (puyo_status.position.x + puyo_status.position_diff.x) as u8;
+		let puyo_movable_y = (puyo_status.position.y + puyo_status.position_diff.y) as u8;
 
 		//yが1の時board_filled_countが0で対応
 		if puyo_center_y > puyo_movable_y {
 			let board_filled_count = _popcnt32(board_split_aligned.0[puyo_movable_x as usize] as i32);
-			self.set_flag(puyo_movable_x, board_filled_count as i8, movable);
+			self.set_flag(&puyo_movable_x, &(board_filled_count as u8), movable);
 			board_split_aligned.0[puyo_movable_x as usize] |= 1 << (board_filled_count);
 
-			let move_drop_count = puyo_movable_y - board_filled_count as i8;
+			let move_drop_count = puyo_movable_y - board_filled_count as u8;
 			drop_count = move_drop_count as u8;
 			//---//
 
 			let board_filled_count = _popcnt32(board_split_aligned.0[puyo_center_x as usize] as i32);
-			self.set_flag(puyo_center_x, board_filled_count as i8, center);
+			self.set_flag(&puyo_center_x, &(board_filled_count as u8), center);
 
-			let center_drop_count = puyo_center_y - board_filled_count as i8;
+			let center_drop_count = puyo_center_y - board_filled_count as u8;
 			if drop_count < center_drop_count as u8 {
 				drop_count = center_drop_count as u8;
 			}
@@ -81,17 +81,17 @@ impl Board {
 			drop_count
 		} else {
 			let board_filled_count = _popcnt32(board_split_aligned.0[puyo_center_x as usize] as i32);
-			self.set_flag(puyo_center_x, board_filled_count as i8, center);
+			self.set_flag(&puyo_center_x, &(board_filled_count as u8), center);
 			board_split_aligned.0[puyo_center_x as usize] |= 1 << (board_filled_count);
 
-			let move_drop_count = puyo_center_y - board_filled_count as i8;
+			let move_drop_count = puyo_center_y - board_filled_count as u8;
 			drop_count = move_drop_count as u8;
 			//---//
 
 			let board_filled_count = _popcnt32(board_split_aligned.0[puyo_movable_x as usize] as i32);
-			self.set_flag(puyo_movable_x, board_filled_count as i8, movable);
+			self.set_flag(&puyo_movable_x, &(board_filled_count as u8), movable);
 
-			let center_drop_count = puyo_movable_y - board_filled_count as i8;
+			let center_drop_count = puyo_movable_y - board_filled_count as u8;
 			if drop_count < center_drop_count as u8 {
 				drop_count = center_drop_count as u8;
 			}
@@ -108,16 +108,16 @@ impl Board {
 		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, board);
 
 		let board_filled_count = _popcnt32(board_split_aligned.0[x as usize] as i32);
-		self.set_flag(x as i8, board_filled_count as i8, puyo);
+		self.set_flag(&x, &(board_filled_count as u8), puyo);
 	}
 
 	///指定したxの高さの場所に上書きします
 	#[inline]
-	pub unsafe fn put_puyo_direct(&mut self, x: u8, heights: &mut [u16; 8], puyo: &PuyoKind) {
-		let height = heights[x as usize];
+	pub unsafe fn put_puyo_direct(&mut self, x: &u8, heights: &mut [u16; 8], puyo: &PuyoKind) {
+		let height = heights[*x as usize];
 
-		self.set_flag(x as i8, height as i8, puyo);
-		heights[x as usize] += 1;
+		self.set_flag(x, &(height as u8), puyo);
+		heights[*x as usize] += 1;
 	}
 
 	#[inline]
@@ -204,42 +204,42 @@ impl Board {
 
 
 	#[inline]
-	pub unsafe fn set_flag(&mut self, x: i8, y: i8, puyo_kind: &PuyoKind) {
+	pub unsafe fn set_flag(&mut self, x: &u8, y: &u8, puyo_kind: &PuyoKind) {
 		match puyo_kind {
 			PuyoKind::Yellow => {
-				BoardBit::set_bit_true(&mut self.0[0], x, y);
-				BoardBit::set_bit_true(&mut self.0[1], x, y);
-				BoardBit::set_bit_true(&mut self.0[2], x, y);
+				BoardBit::set_bit_true(&mut self.0[0], *x, *y);
+				BoardBit::set_bit_true(&mut self.0[1], *x, *y);
+				BoardBit::set_bit_true(&mut self.0[2], *x, *y);
 			}
 			PuyoKind::Green => {
-				BoardBit::set_bit_true(&mut self.0[0], x, y);
-				BoardBit::set_bit_false(&mut self.0[1], x, y);
-				BoardBit::set_bit_true(&mut self.0[2], x, y);
+				BoardBit::set_bit_true(&mut self.0[0], *x, *y);
+				BoardBit::set_bit_false(&mut self.0[1], *x, *y);
+				BoardBit::set_bit_true(&mut self.0[2], *x, *y);
 			}
 			PuyoKind::Red => {
-				BoardBit::set_bit_false(&mut self.0[0], x, y);
-				BoardBit::set_bit_false(&mut self.0[1], x, y);
-				BoardBit::set_bit_true(&mut self.0[2], x, y);
+				BoardBit::set_bit_false(&mut self.0[0], *x, *y);
+				BoardBit::set_bit_false(&mut self.0[1], *x, *y);
+				BoardBit::set_bit_true(&mut self.0[2], *x, *y);
 			}
 			PuyoKind::Blue => {
-				BoardBit::set_bit_false(&mut self.0[0], x, y);
-				BoardBit::set_bit_true(&mut self.0[1], x, y);
-				BoardBit::set_bit_true(&mut self.0[2], x, y);
+				BoardBit::set_bit_false(&mut self.0[0], *x, *y);
+				BoardBit::set_bit_true(&mut self.0[1], *x, *y);
+				BoardBit::set_bit_true(&mut self.0[2], *x, *y);
 			}
 			PuyoKind::Ojama => {
-				BoardBit::set_bit_true(&mut self.0[0], x, y);
-				BoardBit::set_bit_false(&mut self.0[1], x, y);
-				BoardBit::set_bit_false(&mut self.0[2], x, y);
+				BoardBit::set_bit_true(&mut self.0[0], *x, *y);
+				BoardBit::set_bit_false(&mut self.0[1], *x, *y);
+				BoardBit::set_bit_false(&mut self.0[2], *x, *y);
 			}
 			PuyoKind::Wall => {
-				BoardBit::set_bit_false(&mut self.0[0], x, y);
-				BoardBit::set_bit_true(&mut self.0[1], x, y);
-				BoardBit::set_bit_false(&mut self.0[2], x, y);
+				BoardBit::set_bit_false(&mut self.0[0], *x, *y);
+				BoardBit::set_bit_true(&mut self.0[1], *x, *y);
+				BoardBit::set_bit_false(&mut self.0[2], *x, *y);
 			}
 			PuyoKind::Empty => {
-				BoardBit::set_bit_false(&mut self.0[0], x, y);
-				BoardBit::set_bit_false(&mut self.0[1], x, y);
-				BoardBit::set_bit_false(&mut self.0[2], x, y);
+				BoardBit::set_bit_false(&mut self.0[0], *x, *y);
+				BoardBit::set_bit_false(&mut self.0[1], *x, *y);
+				BoardBit::set_bit_false(&mut self.0[2], *x, *y);
 			}
 			_ => panic!()
 		}

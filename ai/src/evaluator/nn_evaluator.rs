@@ -202,7 +202,7 @@ impl<T: NeuralNetwork> NNEvaluator<T> {
 
 					if test_heights[x as usize] < 13 {
 						//	test_board.put_puyo_1(x, &puyo);
-						test_board.put_puyo_direct(x, &mut test_heights, &puyo);
+						test_board.put_puyo_direct(&x, &mut test_heights, &puyo);
 					} else {
 						continue 'pos_x;
 					}
@@ -210,7 +210,7 @@ impl<T: NeuralNetwork> NNEvaluator<T> {
 					let mut test_chain = 0;
 					let mut test_cleared_pos_flag = 0;
 
-					let a = test_board.to_str();
+				//	let a = test_board.to_str();
 					/*	dbg!(x);
 						dbg!(test_heights[x as usize]);
 						dbg!(puyo);

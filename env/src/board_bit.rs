@@ -222,7 +222,7 @@ impl BoardBit {
 		unsafe { _mm_or_si128(x, mask_m128i) }
 	}
 	#[inline]
-	pub unsafe fn set_bit_true(board: &mut __m128i, x: i8, y: i8) {
+	pub unsafe fn set_bit_true(board: &mut __m128i, x: u8, y: u8) {
 		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
 		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, *board);
 		board_split_aligned.0[x as usize] = board_split_aligned.0[x as usize] | 1 << y;
@@ -235,7 +235,7 @@ impl BoardBit {
 	}
 
 	#[inline]
-	pub unsafe fn set_bit_false(board: &mut __m128i, x: i8, y: i8) {
+	pub unsafe fn set_bit_false(board: &mut __m128i, x: u8, y: u8) {
 		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
 		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, *board);
 		board_split_aligned.0[x as usize] = board_split_aligned.0[x as usize] & !(1 << y);
