@@ -5,6 +5,8 @@ use revonet::neuro::{ActivationFunctionType, MultilayeredNetwork, NeuralArchitec
 use ai::build_ai::AI;
 use ai::evaluator::nn_evaluator::NNEvaluator;
 use ai::key_type::KeyType;
+use ai::opponent_status;
+use ai::opponent_status::OpponentStatus;
 use env::env::Env;
 
 #[derive(Clone)]
@@ -48,7 +50,9 @@ impl NeuroProblem for ScoreProblem {
 				for next_p2 in env.next[0] {
 					next.push(next_p2);
 				}
-				ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared,&env.ojama_rate);
+
+				let opponent_status = OpponentStatus::default();
+				ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate, &opponent_status);
 
 				let path = ai.best_move.as_ref().unwrap();
 				for key in path.path.iter() {

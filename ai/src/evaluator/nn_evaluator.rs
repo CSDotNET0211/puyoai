@@ -1,21 +1,23 @@
-﻿use std::arch::x86_64::{__m128i, _mm_andnot_si128, _mm_or_si128, _mm_set_epi64x, _mm_slli_epi16, _mm_slli_si128, _mm_srli_epi16, _mm_srli_si128, _mm_store_si128, _popcnt32};
+﻿use std::arch::x86_64::{__m128i, _mm_and_si128, _mm_andnot_si128, _mm_extract_epi64, _mm_or_si128, _mm_set_epi64x, _mm_slli_epi16, _mm_slli_si128, _mm_srli_epi16, _mm_srli_si128, _mm_store_si128, _popcnt32, _popcnt64};
 use std::collections::BTreeMap;
+use std::mem::transmute;
 
 use revonet::neuro::NeuralNetwork;
 
-use env::board::{Board, COLOR_PUYOS, WIDTH_WITH_BORDER};
+use env::board::{Board, WIDTH_WITH_BORDER};
 use env::board_bit::BoardBit;
 use env::env::DEAD_POSITION;
 use env::ojama_status::OjamaStatus;
-use env::puyo_kind::PuyoKind;
+use env::puyo_kind::{COLOR_PUYOS, PuyoKind};
 use env::split_board::SplitBoard;
+use crate::build_ai::AI;
 
 use crate::debug::Debug;
 use crate::evaluator::Evaluator;
 use crate::ignite_key::IgniteKey;
 use crate::opener_book::Template;
-
-static PUYOS: [PuyoKind; 4] = [PuyoKind::Blue, PuyoKind::Green, PuyoKind::Red, PuyoKind::Yellow];
+use crate::opponent_status::OpponentStatus;
+use crate::potential::Potential;
 /*pub static DIRECTIONS: [(i32, i32); 4] = [
 	(1, 0),   // 右
 	(-1, 0),  // 左
@@ -30,7 +32,7 @@ pub struct NNEvaluator<T: NeuralNetwork> {
 
 
 impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
-	fn evaluate(&mut self, board: &Board, sim_board: &Board, chain: &u8, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize) -> f32 {
+	fn evaluate(&mut self, board: &Board, sim_board: &Board, chain: &u8, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize, best_potential: &Potential, opponent_status: &OpponentStatus) -> f32 {
 		unsafe {
 			if !sim_board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				debug.dead = true;
@@ -50,18 +52,30 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 				cleared_pos_flag |= (!(board_split_aligned.0[i] == 0) as u8) << i;
 			}
 
-			let mut nn_max_potential_chain = 0u8;
-			let mut nn_potential_need = 0u8;
+			//	let mut nn_max_potential_chain = 0u8;
+			//	let mut nn_potential_need = 0u8;
 
 
-			let mut potensial = (0, 0);
+			//	let mut potensial = (0, 0);
 			let heights = board.get_heights();
 
-			Self::get_potential_chain(board, &heights, chain, &cleared_pos_flag, 1, &mut potensial);
-			nn_max_potential_chain = potensial.0;
-			nn_potential_need = potensial.1;
+			//	AI::get_potential_chain(board, &heights, chain, &cleared_pos_flag, 1, &mut potensial);
+			//	nn_max_potential_chain = potensial.0;
+			//	nn_potential_need = potensial.1;
 
-			let nn_chain = 0usize;
+			//addedの部分のbitboardを作成しておいて、4種類すべてとand演算で1をとって、置けた数を取得
+			//置いた結果のboardを使う
+			//bitboard4種類比較して、それぞれでand演算したときのpopcountをすることにより差分と置いた結果のboardで判定できる
+
+			let mut nn_added_count = best_potential.added_count;
+
+			for puyo_type in COLOR_PUYOS {
+				let same_count = BoardBit(_mm_and_si128(best_potential.diff_board.get_bits(puyo_type).0, board.get_bits(puyo_type).0)).popcnt128() as u8;
+				nn_added_count -= same_count;
+			}
+
+			assert!(nn_added_count >= 0);
+
 
 			let nn_ojama_count_in_board = sim_board.get_bits(PuyoKind::Ojama).popcnt128();
 			let height = sim_board.get_heights();
@@ -101,6 +115,7 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 				}
 			}
 
+
 			//全消し状態はスコアとして
 			//相殺した後のお邪魔と送る火力+2
 			//連鎖の位置平均を算出し、前連鎖との距離の合計
@@ -112,10 +127,9 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 			let result = self.neuralnetwork.compute(&[
 				nn_link2 as f32,
 				nn_link3 as f32,
-				nn_chain as f32,
+				*chain as f32,
 				*score as f32,
 				*elapse_frame as f32,
-				height[DEAD_POSITION.x as usize] as f32,
 				nn_bump as f32,
 				nn_height_sum as f32,
 				nn_highest_template_score as f32,
@@ -123,8 +137,19 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 				ojama.get_time_to_receive() as f32,
 				(nn_ojama_size as isize - (*score / *ojama_rate) as isize) as f32,
 				nn_ojama_count_in_board as f32,
-				nn_potential_need as f32,
-				nn_max_potential_chain as f32
+				nn_added_count as f32,
+				best_potential.chain as f32,
+				opponent_status.board_height as f32,
+				opponent_status.board_ojama_count as f32,
+				opponent_status.instant_attack as f32,
+				opponent_status.potential_added_count as f32,
+				opponent_status.potential_chain_count as f32,
+				height[1] as f32,
+				height[2] as f32,
+				height[3] as f32,
+				height[4] as f32,
+				height[5] as f32,
+				height[6] as f32,
 			]);
 
 			result[0]
@@ -182,153 +207,17 @@ impl<T: NeuralNetwork> NNEvaluator<T> {
 //		let two_left = BoardBit(_mm_slli_si128::<2>(twos.0)) & twos;
 	}
 
+
 	#[inline]
-	pub unsafe fn get_potential_chain(board: &Board, heights: &[u16; 8], current_chain: &u8, cleared_pos_flag: &u8, added_count: u8, best_potential: &mut (u8, u8)) {
-		//最後の連鎖のx情報を使って連鎖を実行、cleared_pos_flagが0なら
-		//連鎖数を見てチェック
+	unsafe fn is_split_score_pos(mask: &BoardBit) -> bool {
+		let low_count = _popcnt64(_mm_extract_epi64::<0>(mask.0));
+		let high_count = _popcnt64(_mm_extract_epi64::<1>(mask.0));
 
-
-		//forで順番に仮想落下をして、合計の連鎖数が元よりも大きくなった場合は再帰
-
-		//clear_pos_flagの場所にぷよを落下させる、本当は隣接の色が良いかもしれんけど、とりあえず4色
-		//フラグが立ってるx一覧を取得
-		'pos_x: for x in 1..=6u8 {
-			if ((*cleared_pos_flag >> x) & 1) != 0 {
-				'puyo: for puyo in PUYOS {
-					//置いて連鎖実行した結果、置く前の連鎖と比べて連鎖が伸びたら
-					///最後の連鎖のx情報
-					let mut test_board = board.clone();
-					let mut test_heights = heights.clone();
-
-					if test_heights[x as usize] < 13 {
-						//	test_board.put_puyo_1(x, &puyo);
-						test_board.put_puyo_direct(&x, &mut test_heights, &puyo);
-					} else {
-						continue 'pos_x;
-					}
-
-					let mut test_chain = 0;
-					let mut test_cleared_pos_flag = 0;
-
-				//	let a = test_board.to_str();
-					/*	dbg!(x);
-						dbg!(test_heights[x as usize]);
-						dbg!(puyo);
-						dbg!(a);*/
-
-					Self::simulate(&test_board, &mut test_chain, &mut test_cleared_pos_flag);
-
-					if best_potential.0 < test_chain {
-						*best_potential = (test_chain, added_count);
-					}
-
-					if *current_chain < test_chain {
-						//	assert_eq!(test_cleared_pos_flag, u8::MAX);
-						Self::get_potential_chain(&test_board, &test_heights, &test_chain, &test_cleared_pos_flag, added_count + 1, best_potential);
-					} else {
-						continue 'puyo;
-					}
-				}
-			}
-		}
-	}
-
-	///連鎖のシミュレートを実行、最後のx情報と連鎖数を取得
-	#[inline]
-	unsafe fn simulate(board: &Board, chain: &mut u8, x_pos_flag: &mut u8) {
-		*chain = 0;
-		let mut test_board = board.clone();
-
-		loop {
-			let mut erase_mask = BoardBit::default();
-
-			let temp_score = test_board.erase_if_needed(&chain, &mut erase_mask);
-			if temp_score == 0 {
-				break;
-			}
-
-
-			*x_pos_flag = 0u8;
-			//マスクの情報を使って消えるラインを特定
-			let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-			_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, erase_mask.0);
-
-			for i in 1..=6 {
-				*x_pos_flag |= (!(board_split_aligned.0[i] == 0) as u8) << i;
-			}
-
-			test_board.drop_after_erased(&erase_mask);
-
-
-			*chain += 1;
-		}
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use std::fs;
-	use revonet::neuro::MultilayeredNetwork;
-	use super::*;
-
-	#[test]
-	fn potential_chain_test() {
-		let board =
-			"WWWWWWWW\
-		 WYYYBGGW\
-		 WBBBGRRW\
-		 WEEEBGRW\
-		 WEEEYYYW\
-		 WEEEBGGW\
-		 WEEEBBGW\
-		 WEEEEEEW\
-		 WEEEEEEW\
-		 WEEEEEEW\
-		 WEEEEEEW\
-		 WEEEEEEW\
-		 WEEEEEEW\
-		 WEEEEEEW\
-		 WEEEEEEW\
-		 WEEEEEEW";
-
-
-		unsafe {
-			let board = Board::from_str(&board);
-
-			let mut erase_mask = BoardBit::default();
-			let temp_score = board.erase_if_needed(&0, &mut erase_mask);
-
-			if temp_score == 0 { //panic!();
-			}
-
-			let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-			_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, erase_mask.0);
-
-			let mut cleared_pos_flag = 0u8;
-			for i in 1..7 {
-				cleared_pos_flag |= (!(board_split_aligned.0[i] == 0) as u8) << i;
-			}
-
-			let mut chain = 0;
-			let mut board_clone = board.clone();
-			let mut erase_mask = BoardBit::default();
-			loop {
-				let temp_score = board_clone.erase_if_needed(&chain, &mut erase_mask);
-				if temp_score == 0 {
-					break;
-				}
-
-				board_clone.drop_after_erased(&erase_mask);
-
-				chain += 1;
-			}
-
-
-			let heights = board.get_heights();
-			let mut potensial = (0, 0);
-
-			NNEvaluator::<MultilayeredNetwork>::get_potential_chain(&board, &heights, &chain, &cleared_pos_flag, 1, &mut potensial);
-			dbg!(potensial);
+		if (low_count == 0 && high_count != 0)
+			|| (low_count != 0 && high_count == 0) {
+			true
+		} else {
+			false
 		}
 	}
 }

@@ -17,7 +17,7 @@ impl BattleProblem {
 
 impl NeuroProblem for BattleProblem {
 	fn get_inputs_num(&self) -> usize {
-		15
+		25
 	}
 
 	fn get_outputs_num(&self) -> usize {
@@ -27,7 +27,7 @@ impl NeuroProblem for BattleProblem {
 	fn get_default_net(&self) -> MultilayeredNetwork {
 		let mut rng1 = thread_rng();
 		let mut net: MultilayeredNetwork = MultilayeredNetwork::new(self.get_inputs_num(), self.get_outputs_num());
-		net.add_hidden_layer(10usize, ActivationFunctionType::Relu)
+		net.add_hidden_layer(20usize, ActivationFunctionType::Relu)
 			.add_hidden_layer(5usize, ActivationFunctionType::Relu)
 			.build(&mut rng1, NeuralArchitecture::Multilayered);
 

@@ -1,12 +1,14 @@
 ﻿use std::arch::x86_64::{_mm_andnot_si128, _mm_or_si128, _mm_slli_epi16, _mm_slli_si128, _mm_srli_epi16, _mm_srli_si128};
-use env::board::{Board, COLOR_PUYOS, WIDTH_WITH_BORDER};
+use env::board::{Board,  WIDTH_WITH_BORDER};
 use env::board_bit::BoardBit;
 use env::env::DEAD_POSITION;
 use env::ojama_status::OjamaStatus;
-use env::puyo_kind::PuyoKind;
+use env::puyo_kind::{COLOR_PUYOS, PuyoKind};
 use crate::debug::Debug;
 use crate::evaluator::Evaluator;
 use crate::ignite_key::IgniteKey;
+use crate::opponent_status::OpponentStatus;
+use crate::potential::Potential;
 
 static PUYOS: [PuyoKind; 4] = [PuyoKind::Blue, PuyoKind::Green, PuyoKind::Red, PuyoKind::Yellow];
 /*pub static DIRECTIONS: [(i32, i32); 4] = [
@@ -21,7 +23,7 @@ pub struct SimpleEvaluator {
 }
 
 impl Evaluator for SimpleEvaluator {
-	fn evaluate(&mut self, board: &Board, sim_board: &Board, chain: &u8, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize) -> f32 {
+	fn evaluate(&mut self, board: &Board, sim_board: &Board, chain: &u8, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize,best_potential: &Potential,opponent_status: &OpponentStatus) -> f32 {
 		panic!();
 		//	Console::print_board(&board);
 		let mut result = 0.;

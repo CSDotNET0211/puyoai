@@ -1,7 +1,8 @@
 ﻿use std::arch::x86_64::{__m128i, _mm_and_si128};
 
-use env::board::{Board, COLOR_PUYOS};
+use env::board::{Board};
 use env::board_bit::BoardBit;
+use env::puyo_kind::COLOR_PUYOS;
 
 #[derive(Debug, Clone)]
 pub struct Template(pub Box<[__m128i]>);

@@ -6,7 +6,7 @@ use rand::rngs::ThreadRng;
 use crate::board_bit::BoardBit;
 use crate::env::{MAX_OJAMA_RECEIVE_COUNT, OJAMA_POS};
 use crate::ojama_status::OjamaStatus;
-use crate::puyo_kind::PuyoKind;
+use crate::puyo_kind::{COLOR_PUYOS, PuyoKind};
 use crate::puyo_status::PuyoStatus;
 use crate::split_board::SplitBoard;
 
@@ -15,7 +15,6 @@ pub const WIDTH_WITH_BORDER: u8 = 8;
 
 pub const HEIGHT: u8 = 14;
 pub const HEIGHT_WITH_BORDER: u8 = 16;
-pub const COLOR_PUYOS: [PuyoKind; 4] = [PuyoKind::Red, PuyoKind::Yellow, PuyoKind::Blue, PuyoKind::Green];
 
 pub struct Board(pub [__m128i; 3]);
 
@@ -50,10 +49,13 @@ impl Board {
 		let mut drop_count: u8;
 
 		//TODO: get_heights関数使おう
-		let board = _mm_or_si128(self.0[0], _mm_or_si128(self.0[1], self.0[2]));
-		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, board);
+		//	let board = _mm_or_si128(self.0[0], _mm_or_si128(self.0[1], self.0[2]));
+		//	let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
+		//	_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, board);
 
+		//上でboard_split_alignedの高さ情報は14がやばい
+		//この方法の場合、14段目上書きになるけど、移動できないから問題ない
+		let mut heights = self.get_heights();
 
 		let puyo_center_x = puyo_status.position.x as u8;
 		let puyo_center_y = puyo_status.position.y as u8;
@@ -62,15 +64,16 @@ impl Board {
 
 		//yが1の時board_filled_countが0で対応
 		if puyo_center_y > puyo_movable_y {
-			let board_filled_count = _popcnt32(board_split_aligned.0[puyo_movable_x as usize] as i32);
+			let board_filled_count = heights[puyo_movable_x as usize];
 			self.set_flag(&puyo_movable_x, &(board_filled_count as u8), movable);
-			board_split_aligned.0[puyo_movable_x as usize] |= 1 << (board_filled_count);
+			heights[puyo_movable_x as usize] += 1;
+			//board_split_aligned.0[puyo_movable_x as usize] |= 1 << (board_filled_count);
 
 			let move_drop_count = puyo_movable_y - board_filled_count as u8;
 			drop_count = move_drop_count as u8;
 			//---//
 
-			let board_filled_count = _popcnt32(board_split_aligned.0[puyo_center_x as usize] as i32);
+			let board_filled_count = heights[puyo_center_x as usize];
 			self.set_flag(&puyo_center_x, &(board_filled_count as u8), center);
 
 			let center_drop_count = puyo_center_y - board_filled_count as u8;
@@ -80,16 +83,26 @@ impl Board {
 
 			drop_count
 		} else {
-			let board_filled_count = _popcnt32(board_split_aligned.0[puyo_center_x as usize] as i32);
+			let board_filled_count = heights[puyo_center_x as usize];
 			self.set_flag(&puyo_center_x, &(board_filled_count as u8), center);
-			board_split_aligned.0[puyo_center_x as usize] |= 1 << (board_filled_count);
+			heights[puyo_center_x  as usize] += 1;
+//			board_split_aligned.0[puyo_center_x as usize] |= 1 << (board_filled_count);
+
+			/*if puyo_center_y as i32 - board_filled_count < 0 {
+				dbg!(self.to_str());
+			}*/
 
 			let move_drop_count = puyo_center_y - board_filled_count as u8;
 			drop_count = move_drop_count as u8;
-			//---//
 
-			let board_filled_count = _popcnt32(board_split_aligned.0[puyo_movable_x as usize] as i32);
+
+			let board_filled_count = heights[puyo_movable_x as usize];
 			self.set_flag(&puyo_movable_x, &(board_filled_count as u8), movable);
+
+			/*	let aa = puyo_movable_y;
+				let aaa = board_filled_count;
+				let a = puyo_movable_y as i32 - board_filled_count;
+				assert!(!((puyo_movable_y - board_filled_count as u8) < 0));*/
 
 			let center_drop_count = puyo_movable_y - board_filled_count as u8;
 			if drop_count < center_drop_count as u8 {

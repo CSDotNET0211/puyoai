@@ -1,5 +1,8 @@
 ﻿use strum::EnumIter;
 
+
+pub const COLOR_PUYOS: [PuyoKind; 4] = [PuyoKind::Red, PuyoKind::Yellow, PuyoKind::Blue, PuyoKind::Green];
+
 #[repr(u8)]
 #[derive(PartialEq, Debug, Copy, Clone, EnumIter)]
 pub enum PuyoKind {

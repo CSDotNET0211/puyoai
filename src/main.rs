@@ -74,7 +74,7 @@ fn main() {
 				.read_line(&mut input)
 				.unwrap();
 	*/
-		input = "5".parse().unwrap();
+		input = "4".parse().unwrap();
 
 		match input.trim() {
 			"1" => {}
@@ -125,9 +125,9 @@ fn main() {
 						}
 						_ => {}
 					}*/
-
+					panic!();
 					let start = Instant::now();
-					ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate);
+					//			ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate);
 					let duration = start.elapsed();
 
 

@@ -5,6 +5,7 @@ use rand::{Rng, thread_rng};
 use ai::build_ai::AI;
 use ai::evaluator::Evaluator;
 use ai::key_type::KeyType;
+use ai::opponent_status::OpponentStatus;
 use env::env::{Env, Event};
 use env::event_type::EventType;
 use env::puyo_kind::PuyoKind;
@@ -13,9 +14,11 @@ pub struct BattleEnv<E: Evaluator> {
 	pub player1: Env,
 	player1_inputs: VecDeque<KeyType>,
 	player1_ai: AI<E>,
+	player1_opponent_status: OpponentStatus,
 	pub player2: Env,
 	player2_inputs: VecDeque<KeyType>,
 	player2_ai: AI<E>,
+	player2_opponent_status: OpponentStatus,
 	pub game_frame: usize,
 }
 
@@ -27,6 +30,8 @@ impl<E: Evaluator> BattleEnv<E> {
 			player2: Env::new(&seed),
 			player1_ai,
 			player2_ai,
+			player1_opponent_status: OpponentStatus::default(),
+			player2_opponent_status: OpponentStatus::default(),
 			player1_inputs: VecDeque::new(),
 			player2_inputs: VecDeque::new(),
 			game_frame: 0,
@@ -53,12 +58,17 @@ impl<E: Evaluator> BattleEnv<E> {
 		self.player1.update();
 		self.player2.update();
 
+		if self.game_frame % 10 == 0 {
+			self.player1_opponent_status = OpponentStatus::new(&self.player2.board);
+			self.player2_opponent_status = OpponentStatus::new(&self.player1.board);
+		}
+
 		if Self::update_player(self.game_frame, &mut self.player1.events) {
-			Self::process_key_inputs(&mut self.player1_inputs, &mut self.player1, &mut self.player1_ai, &mut self.player2);
+			Self::process_key_inputs(&mut self.player1_inputs, &mut self.player1, &mut self.player1_ai, &mut self.player2, &self.player1_opponent_status);
 		}
 
 		if Self::update_player(self.game_frame, &mut self.player2.events) {
-			Self::process_key_inputs(&mut self.player2_inputs, &mut self.player2, &mut self.player2_ai, &mut self.player1);
+			Self::process_key_inputs(&mut self.player2_inputs, &mut self.player2, &mut self.player2_ai, &mut self.player1, &self.player2_opponent_status);
 		}
 
 		self.game_frame += 1;
@@ -93,7 +103,7 @@ impl<E: Evaluator> BattleEnv<E> {
 	}
 
 	//指定したプレイヤーのAI操作をします
-	unsafe fn process_key_inputs(player_inputs: &mut VecDeque<KeyType>, env: &mut Env, ai: &mut AI<E>, opponent: &mut Env) {
+	unsafe fn process_key_inputs(player_inputs: &mut VecDeque<KeyType>, env: &mut Env, ai: &mut AI<E>, opponent: &mut Env, opponent_status: &OpponentStatus) {
 		if env.center_puyo == PuyoKind::Empty &&
 			env.movable_puyo == PuyoKind::Empty {
 			env.create_new_puyo();
@@ -110,10 +120,10 @@ impl<E: Evaluator> BattleEnv<E> {
 			//		next.push(next_p);
 			//	}
 
-			//	let think_start = Instant::now();
-			ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate);
-			//	let time = think_start.elapsed().as_millis();
-			//	println!("{}", format!("{:04}", time));
+	//		let think_start = Instant::now();
+			ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate, opponent_status);
+	//		let time = think_start.elapsed().as_millis();
+	//		println!("{}", format!("{:04}", time));
 			//	dbg!(think_start.elapsed().as_millis());
 
 			*player_inputs = ai.best_move.as_ref().unwrap().path.to_vec().into();
