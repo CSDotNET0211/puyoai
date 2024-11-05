@@ -32,40 +32,12 @@ pub struct NNEvaluator<T: NeuralNetwork> {
 
 
 impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
-	fn evaluate(&mut self, board: &Board, sim_board: &Board, chain: &u8, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize, best_potential: &Potential, opponent_status: &OpponentStatus) -> f32 {
+	fn evaluate(&mut self, board: &Board, sim_board: &Board, chain: &u8, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize, best_potential: &Potential, opponent_status: &OpponentStatus, waste_chain_link: &usize) -> f32 {
 		unsafe {
 			if !sim_board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				debug.dead = true;
 				return f32::MIN;
 			}
-
-			let mut erase_mask = BoardBit::default();
-			board.erase_if_needed(&0, &mut erase_mask);
-
-//TODO: ここら辺関数化して
-			//マスクの情報を使って消えるラインを特定
-			let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-			_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, erase_mask.0);
-
-			let mut cleared_pos_flag = 0u8;
-			for i in 1..7 {
-				cleared_pos_flag |= (!(board_split_aligned.0[i] == 0) as u8) << i;
-			}
-
-			//	let mut nn_max_potential_chain = 0u8;
-			//	let mut nn_potential_need = 0u8;
-
-
-			//	let mut potensial = (0, 0);
-			let heights = board.get_heights();
-
-			//	AI::get_potential_chain(board, &heights, chain, &cleared_pos_flag, 1, &mut potensial);
-			//	nn_max_potential_chain = potensial.0;
-			//	nn_potential_need = potensial.1;
-
-			//addedの部分のbitboardを作成しておいて、4種類すべてとand演算で1をとって、置けた数を取得
-			//置いた結果のboardを使う
-			//bitboard4種類比較して、それぞれでand演算したときのpopcountをすることにより差分と置いた結果のboardで判定できる
 
 			let mut nn_added_count = best_potential.added_count;
 
@@ -150,6 +122,8 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 				height[4] as f32,
 				height[5] as f32,
 				height[6] as f32,
+				//*waste_chain_link as f32,
+				
 			]);
 
 			result[0]

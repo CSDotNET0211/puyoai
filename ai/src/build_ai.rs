@@ -1,6 +1,7 @@
 ﻿use std::arch::x86_64::{__m128i, _mm_andnot_si128, _mm_set_epi64x, _mm_setzero_si128, _mm_store_si128};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+
 use rand::rngs::ThreadRng;
 use rand::thread_rng;
 
@@ -189,16 +190,15 @@ impl<E: Evaluator> AI<E> {
 			if ojama_clone.get_receivable_ojama_size() != 0 {
 				new_board_sim.try_put_ojama(&mut ojama_clone, rng);
 			}
-			if !new_board_sim.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
-				continue;
-			}
+
+			let mut waste_chain_link = 0;
 
 			let mut new_score = score;
 			let mut chain = 0u8;
 
 			let mut erase_mask = BoardBit::default();
 			loop {
-				let temp_score = new_board_sim.erase_if_needed(&chain, &mut erase_mask);
+				let temp_score = new_board_sim.erase_if_needed(&chain, &mut erase_mask, &mut waste_chain_link);
 				if temp_score == 0 {
 					break;
 				}
@@ -208,6 +208,10 @@ impl<E: Evaluator> AI<E> {
 
 				chain += 1;
 				new_score += temp_score as usize;
+			}
+
+			if !new_board_sim.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
+				continue;
 			}
 
 			if new_board_sim.is_same(&_mm_setzero_si128(),
@@ -240,11 +244,11 @@ impl<E: Evaluator> AI<E> {
 				let new_center_puyo = new_next.pop().unwrap();
 				let new_movable_puyo = new_next.pop().unwrap();
 
-				
+
 				self.search_internal(&new_board_sim, &new_current, &new_next, &ojama_clone, new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate, rng, best_potential, opponent_status);
 			} else {
 				let mut debug = Debug::new();
-				let eval = self.evaluator.evaluate(&new_board, &new_board_sim, &chain, &new_score, &0, &mut debug, &ojama_clone, ojama_rate, best_potential, opponent_status);
+				let eval = self.evaluator.evaluate(&new_board, &new_board_sim, &chain, &new_score, &0, &mut debug, &ojama_clone, ojama_rate, best_potential, opponent_status, &waste_chain_link);
 
 				//highest_evalよりも評価が高かったら、計算したpath、
 				if self.best_move == None || self.best_move.as_ref().unwrap().eval < eval {
@@ -589,7 +593,7 @@ impl<E: Evaluator> AI<E> {
 		loop {
 			let mut erase_mask = BoardBit::default();
 
-			let temp_score = test_board.erase_if_needed(&chain, &mut erase_mask);
+			let temp_score = test_board.erase_if_needed(&chain, &mut erase_mask, &mut 0);
 			if temp_score == 0 {
 				break;
 			}
@@ -615,8 +619,8 @@ impl<E: Evaluator> AI<E> {
 
 #[cfg(test)]
 mod tests {
-	use std::fs;
 	use revonet::neuro::MultilayeredNetwork;
+
 	use super::*;
 
 	#[test]

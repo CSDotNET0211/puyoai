@@ -23,13 +23,18 @@ use env::vector2::Vector2;
 use crate::battle_env::BattleEnv;
 use crate::log::Log;
 use crate::log::LogType::INFO;
+
 use crate::problems::battle_problem::BattleProblem;
 
 mod log;
 mod battle_env;
 mod problems;
+
 #[cfg(feature = "ppc")]
+
 mod ppc_wrapper;
+#[cfg(feature = "ppc")]
+use crate::ppc_wrapper::PpcWrapper;
 
 //use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 //use rand::Rng;
@@ -74,7 +79,7 @@ fn main() {
 				.read_line(&mut input)
 				.unwrap();
 	*/
-		input = "4".parse().unwrap();
+		input = "5".parse().unwrap();
 
 		match input.trim() {
 			"1" => {}
@@ -215,7 +220,12 @@ fn main() {
 				let json_str = fs::read_to_string(r"test.json").unwrap();
 				let net: MultilayeredNetwork = serde_json::from_str(&json_str).unwrap();
 				let ai = AI::new(NNEvaluator::new(net));
-				let mut battle = BattleEnv::new(ai.clone(), ai.clone());
+
+				let json_str = fs::read_to_string(r"test2.json").unwrap();
+				let net: MultilayeredNetwork = serde_json::from_str(&json_str).unwrap();
+				let ai2 = AI::new(NNEvaluator::new(net));
+				
+				let mut battle = BattleEnv::new(ai.clone(), ai2.clone());
 
 				Console::clear();
 				loop {
@@ -255,8 +265,10 @@ unsafe fn ppc() {
 	//		let mut scp2 = ScpBus::new().unwrap();
 	//		let controller = scp2.plug_in(1).unwrap();
 	//		thread::sleep(Duration::from_secs(1000));
-	let mut scp = ppc::scp::Scp::new();
-	let mut controller = ppc::controller::Controller::new();
+	//let mut scp = ppc::scp::Scp::new();
+	//let mut controller = ppc::controller::Controller::new();
+	let mut ppc = PpcWrapper::new();
+
 	let mut left_puyos = COLOR_PUYOS.to_vec();
 	let mut puyo_mapping = HashMap::new();
 	puyo_mapping.insert(PpcPuyoKind::Null, PuyoKind::Empty);

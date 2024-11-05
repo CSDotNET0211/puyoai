@@ -120,11 +120,11 @@ impl<E: Evaluator> BattleEnv<E> {
 			//		next.push(next_p);
 			//	}
 
-	//		let think_start = Instant::now();
+			let think_start = Instant::now();
 			ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate, opponent_status);
-	//		let time = think_start.elapsed().as_millis();
-	//		println!("{}", format!("{:04}", time));
-			//	dbg!(think_start.elapsed().as_millis());
+			let time = think_start.elapsed().as_millis();
+			//println!("{}", format!("{:04}", time));
+				dbg!(think_start.elapsed().as_millis());
 
 			*player_inputs = ai.best_move.as_ref().unwrap().path.to_vec().into();
 		} else {

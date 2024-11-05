@@ -419,7 +419,7 @@ impl Env {
 		let mut chain_score: usize = 0;
 		let mut elapsed_frame = 0usize;
 		loop {
-			let score = self.board.erase_if_needed(&chain, &mut board_mask);
+			let score = self.board.erase_if_needed(&chain, &mut board_mask, &mut 0);
 			if score == 0 {
 				break;
 			}

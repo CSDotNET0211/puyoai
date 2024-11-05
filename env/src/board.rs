@@ -48,12 +48,6 @@ impl Board {
 	pub unsafe fn put_puyo(&mut self, puyo_status: &PuyoStatus, center: &PuyoKind, movable: &PuyoKind) -> u8 {
 		let mut drop_count: u8;
 
-		//TODO: get_heights関数使おう
-		//	let board = _mm_or_si128(self.0[0], _mm_or_si128(self.0[1], self.0[2]));
-		//	let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-		//	_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, board);
-
-		//上でboard_split_alignedの高さ情報は14がやばい
 		//この方法の場合、14段目上書きになるけど、移動できないから問題ない
 		let mut heights = self.get_heights();
 
@@ -85,7 +79,7 @@ impl Board {
 		} else {
 			let board_filled_count = heights[puyo_center_x as usize];
 			self.set_flag(&puyo_center_x, &(board_filled_count as u8), center);
-			heights[puyo_center_x  as usize] += 1;
+			heights[puyo_center_x as usize] += 1;
 //			board_split_aligned.0[puyo_center_x as usize] |= 1 << (board_filled_count);
 
 			/*if puyo_center_y as i32 - board_filled_count < 0 {
@@ -113,7 +107,6 @@ impl Board {
 		}
 	}
 
-	//TODO: あふれ出ちゃう
 	#[inline]
 	pub unsafe fn put_puyo_1(&mut self, x: u8, puyo: &PuyoKind) {
 		let board = _mm_or_si128(self.0[0], _mm_or_si128(self.0[1], self.0[2]));
@@ -162,7 +155,6 @@ impl Board {
 
 	#[inline]
 	pub unsafe fn try_put_ojama(&mut self, ojama: &mut OjamaStatus, rng: &mut ThreadRng) {
-		//TODO: 全体的にマジックナンバー何とかしろ、あとお邪魔ってマスクとかいるよね？14
 		let mut ojama_to_receive = ojama.get_receivable_ojama_size();
 
 		if ojama_to_receive > MAX_OJAMA_RECEIVE_COUNT {
@@ -375,7 +367,7 @@ impl Board {
 		self.get_bits(PuyoKind::Empty).get_1_flag((x * HEIGHT_WITH_BORDER as i16 + y) as i8)
 	}
 	#[inline]
-	pub unsafe fn erase_if_needed(&self, chain_count: &u8, erased_flag: &mut BoardBit) -> u32 {
+	pub unsafe fn erase_if_needed(&self, chain_count: &u8, erased_flag: &mut BoardBit, waste_chain_link: &mut usize) -> u32 {
 		erased_flag.0 = _mm_setzero_si128();
 
 		let mut color_count = 0;
@@ -396,6 +388,8 @@ impl Board {
 
 			let pop_count = erasing_bit.popcnt128();
 			erased_puyo_count += pop_count;
+
+			*waste_chain_link += pop_count as usize - 4;
 
 			if pop_count <= 7 {
 				link_bonus += Self::get_link_bonus(&pop_count);

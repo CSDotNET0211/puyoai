@@ -1,8 +1,11 @@
 ﻿use std::sync::{Arc, Mutex, MutexGuard};
 use ppc::{PpcInput, PpcPuyoKind};
+use ppc::field::Field;
 use ai::key_type::KeyType;
 use env::puyo_kind::PuyoKind;
 use ppc::ppc::PPC;
+use ppc::PpcPuyoKind::Null;
+use ppc::scp::Controller;
 use env::board::Board;
 use env::puyo_status::PuyoStatus;
 use crate::check_and_register_using_puyos;
@@ -17,23 +20,103 @@ pub struct PpcWrapper {
 
 
 impl PpcWrapper {
-	pub unsafe fn new() -> Self {
-		let callback = Some(Box::new(|| {
-			update()
-		}));
-
-		let mut s = Self {
-			ppc: PPC::new(callback),
+	pub unsafe fn new(player_index: usize, scp: Controller) -> Self {
+		let mut ppc_wrapper = Self {
+			ppc: PPC::new(player_index),
 			board: None,
 			queue: None,
 			current: None,
 			is_movable: false,
 		};
 
-		s.update();
+		ppc_wrapper.ppc.register_update(Some(Box::new(|| {
+			ppc_wrapper.update();
+		})));
 
-		s
+		ppc_wrapper.update();
+
+		ppc_wrapper
 	}
+
+
+	///各種フィールド情報を更新
+	fn update(field: Arc<Mutex<Field>>) {
+
+
+		//取得できなかった奴はnone
+		if field.lock().unwrap().board.is_none() {
+			field.lock().unwrap().board = Default::default();
+		}
+		self.get_field(self.player_index as u8, &mut self.field.lock().unwrap().board.unwrap());
+
+		/*if self.next.lock().unwrap().is_none() {
+			*self.next.lock().unwrap() = Default::default();
+		}*/
+		match self.get_queue(0) {
+			Ok((value1, value2)) => {
+				self.field.lock().unwrap().next.unwrap()[0] = (value1, value2);
+			}
+			Err(_) => { self.field.lock().unwrap().next.unwrap()[0] = (PpcPuyoKind::Null, PpcPuyoKind::Null) }
+		}
+
+
+		match self.get_queue(1) {
+			Ok((value1, value2)) => {
+				self.field.lock().unwrap().next.unwrap()[1] = (value1, value2);
+			}
+			Err(_) => { self.field.lock().unwrap().next.unwrap()[1] = (PpcPuyoKind::Null, PpcPuyoKind::Null) }
+		}
+
+
+		match self.get_is_movable() {
+			Ok(value) => {
+				self.field.lock().unwrap().is_movable = value;
+			}
+			Err(_) => {
+				self.field.lock().unwrap().is_movable = false;
+			}
+		}
+
+
+		let pos = self.get_current_pos();
+		let rotation = self.get_current_rotation();
+		let center = self.get_current_center_puyo(0);
+		let movable = self.get_current_movable_puyo(0);
+
+
+		self.field.lock().unwrap().current = match (pos, rotation, center, movable) {
+			(Ok(pos), Ok(rotation), Ok(center), Ok(movable)) => {
+				if pos.0 == 0 || pos.1 == 0 || center == PpcPuyoKind::Null || movable == Null {
+					None
+				} else {
+					Option::from(PpcPuyoStatus {
+						center_puyo: PpcPuyoKind::from(center),
+						movable_puyo: PpcPuyoKind::from(movable),
+						rotation: rotation,
+						position: pos,
+					})
+				}
+			}
+			(Err(e), _, _, _) | (_, Err(e), _, _) | (_, _, Err(e), _) | (_, _, _, Err(e)) => {
+				None
+			}
+		};
+
+
+		self.on_update.unwrap();
+	}
+
+	fn update_game_state(&mut self) {
+		let new_state = self.get_state();
+		if new_state != self.field.lock().unwrap().current_game_state {
+			if self.on_gamestate_changed.is_some() {
+				self.on_gamestate_changed.unwrap()(self.field.lock().unwrap().current_game_state);
+			}
+		}
+
+		self.field.lock().unwrap().current_game_state = new_state;
+	}
+
 	pub unsafe fn update(&mut self) {
 		match *self.ppc.board.lock().unwrap() {
 			Some(board) => {
