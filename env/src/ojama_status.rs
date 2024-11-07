@@ -4,7 +4,7 @@ pub struct OjamaStatus(pub u64);
 impl OjamaStatus {
 	pub fn clone(&self) -> Self {
 		OjamaStatus {
-			0: 0
+			0: self.0
 		}
 	}
 

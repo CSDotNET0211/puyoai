@@ -21,7 +21,7 @@ pub struct Board(pub [__m128i; 3]);
 
 impl Board {
 	#[inline]
-	pub unsafe fn new() -> Board {
+	pub unsafe fn default() -> Board {
 		Board {
 			0: [_mm_setzero_si128(), _mm_set_epi64x(0b1111111111111111000000000000000100000000000000010000000000000001u64 as i64, 0b0000000000000001000000000000000100000000000000011111111111111111u64 as i64), _mm_setzero_si128()],
 

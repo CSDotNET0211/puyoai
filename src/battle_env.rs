@@ -124,7 +124,7 @@ impl<E: Evaluator> BattleEnv<E> {
 			ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate, opponent_status);
 			let time = think_start.elapsed().as_millis();
 			//println!("{}", format!("{:04}", time));
-				dbg!(think_start.elapsed().as_millis());
+			//dbg!(think_start.elapsed().as_millis());
 
 			*player_inputs = ai.best_move.as_ref().unwrap().path.to_vec().into();
 		} else {

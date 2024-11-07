@@ -12,7 +12,7 @@ impl Potential {
 		Potential {
 			added_count: 0,
 			chain: 0,
-			diff_board:Board::new()
+			diff_board:Board::default()
 		}
 	}
 }

@@ -70,7 +70,7 @@ impl<E: Evaluator> AI<E> {
 		//	let mut potential = Self::get_potential_chain_all(&board);
 		let mut potential = Potential::default();
 		let mask = board.get_not_empty_board();
-		let mut diff_board = Board::new();
+		let mut diff_board = Board::default();
 		diff_board.0[0] = _mm_andnot_si128(mask.0, potential.diff_board.0[0]);
 		diff_board.0[1] = _mm_andnot_si128(mask.0, potential.diff_board.0[1]);
 		diff_board.0[2] = _mm_andnot_si128(mask.0, potential.diff_board.0[2]);

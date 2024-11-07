@@ -103,7 +103,7 @@ pub struct Env {
 impl Env {
 	pub unsafe fn new(seed: &u32) -> Env {
 		Env {
-			board: Board::new(),
+			board: Board::default(),
 			center_puyo: PuyoKind::Empty,
 			movable_puyo: PuyoKind::Empty,
 			puyo_status: PuyoStatus::new(Vector2::new(0, 0), Rotation::new(0)),

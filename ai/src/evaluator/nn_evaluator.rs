@@ -122,7 +122,7 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 				height[4] as f32,
 				height[5] as f32,
 				height[6] as f32,
-				//*waste_chain_link as f32,
+				*waste_chain_link as f32,
 				
 			]);
 
