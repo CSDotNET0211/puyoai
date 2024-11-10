@@ -458,7 +458,7 @@ impl Env {
 					value: FrameNeeded::VANISH_PUYO_ANIMATION,
 					value2: Default::default(),
 				});
-				elapsed_frame += FrameNeeded::VANISH_PUYO_ANIMATION;
+				elapsed_frame += FrameNeeded::LAND_PUYO_ANIMATION;
 			}
 
 			chain += 1;
@@ -474,13 +474,12 @@ impl Env {
 		}
 
 
-		let mut attack: usize = (chain_score / self.ojama_rate) as usize;
+		let mut attack: usize = chain_score / self.ojama_rate;
 		attack = self.ojama.offset(attack);
 
 		if attack != 0 {
 			if let Some(opponent) = opponent {
 				opponent.ojama.push(attack, (self.current_frame + elapsed_frame).saturating_sub(opponent.current_frame));
-				//			opponent.events.push_back(( as u32, Attack, chain_score / ojama_rate))
 			}
 		}
 	}

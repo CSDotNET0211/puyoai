@@ -1,5 +1,6 @@
 ﻿use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use ppc::{GameState, PpcInput, PpcPuyoKind};
 use ppc::GameState::Idle;
@@ -22,6 +23,7 @@ use crate::field::Field;
 pub struct PpcWrapper {
 	ppc: PPC,
 	pub field: Arc<Mutex<Field>>,
+	pub opponent_field: Arc<Mutex<Field>>,
 	player_index: usize,
 	left_puyos: Vec<PuyoKind>,
 	puyo_mapping: HashMap<PpcPuyoKind, PuyoKind>,
@@ -29,34 +31,37 @@ pub struct PpcWrapper {
 	//pub on_gamestate_changed: Option<Box<dyn Fn(GameState, &mut PpcWrapper) + Send>>,
 	pub inputs: Vec<KeyType>,
 	raw_board: [PpcPuyoKind; 14 * 6],
+	raw_board_otf: [PpcPuyoKind; 14 * 6],
 	current_frame: u32,
 	current_state: GameState,
-	ogirin_pos: Option<PuyoStatus>,
+	pub origin_pos: Option<PuyoStatus>,
 	opponent_index: usize,
 	pub opponent_status: OpponentStatus,
 	pub opponent_board: Board,
 	raw_opponent_board: [PpcPuyoKind; 14 * 6],
 	pub ojama_status: OjamaStatus,
-	controller: Controller,
+	controller: Option<Controller>,
 	pressing: bool,
 }
 
 
 impl PpcWrapper {
-	pub unsafe fn new(player_index: usize, opponent_index: usize, scp: Controller) -> Self {
+	pub unsafe fn new(player_index: usize, opponent_index: usize, scp: Option<Controller>) -> Self {
 		let mut ppc_wrapper = Self {
 			ppc: PPC::new(player_index),
 			raw_board: [PpcPuyoKind::Null; 84],
+			raw_board_otf: [PpcPuyoKind::Null; 84],
 			puyo_mapping: Default::default(),
 			inputs: Default::default(),
 			left_puyos: Default::default(),
 			field: Arc::new(Mutex::new(Field::default())),
+			opponent_field: Arc::new(Mutex::new(Field::default())),
 			player_index,
 			opponent_status: OpponentStatus::default(),
 			ojama_status: OjamaStatus(0),
 			current_frame: 0,
 			current_state: Idle,
-			ogirin_pos: None,
+			origin_pos: None,
 			opponent_index,
 			opponent_board: Board::default(),
 			raw_opponent_board: [PpcPuyoKind::Null; 14 * 6],
@@ -71,6 +76,11 @@ impl PpcWrapper {
 	pub fn reset_puyo_info(&mut self) {
 		self.left_puyos = COLOR_PUYOS.to_vec();
 		self.puyo_mapping.clear();
+		self.inputs.clear();
+		self.origin_pos = None;
+		if self.controller.is_some() {
+			self.controller.as_mut().unwrap().release_all();
+		}
 	}
 
 	pub fn connect(&mut self) {
@@ -98,33 +108,32 @@ impl PpcWrapper {
 		if !self.ppc.is_active_window() {
 			return;
 		}
-		//	let field = self.field.lock().as_mut().unwrap();
-		//println!("{:?}", self.current_frame);
 
-		if self.inputs.len() == 0 {
-			self.update_board();
 
-			self.ppc.get_board(&mut self.raw_opponent_board);
-			for y in 1..=13u8 {
-				for x in 0..6u8 {
-					let raw_puyo = self.raw_opponent_board[(x + (y) * 6) as usize];
-					let puyo = self.check_and_register_using_puyos(&raw_puyo);
-					self.opponent_board.set_flag(&(x + 1), &(14 - (y + 1) + 1), &puyo);
-				}
-			}
+		self.update_board();
+
+		self.ppc.get_board(&mut self.raw_opponent_board);
+		for y in 1..=13u8 {
 			for x in 0..6u8 {
-				let raw_puyo = self.raw_opponent_board[(x + 0 * 6) as usize];
+				let raw_puyo = self.raw_opponent_board[(x + (y) * 6) as usize];
 				let puyo = self.check_and_register_using_puyos(&raw_puyo);
-				self.opponent_board.set_flag(&(x + 1), &14, &puyo);
+				self.opponent_board.set_flag(&(x + 1), &(14 - (y + 1) + 1), &puyo);
 			}
 		}
-//		self.update_opponent_board(&mut self.raw_opponent_board, &mut self.opponent_board);
+		for x in 0..6u8 {
+			let raw_puyo = self.raw_opponent_board[(x + 0 * 6) as usize];
+			let puyo = self.check_and_register_using_puyos(&raw_puyo);
+			self.opponent_board.set_flag(&(x + 1), &14, &puyo);
+		}
+
+
 		self.update_next();
+
+
+		//	println!("board end");
+		//	}
+//		self.update_opponent_board(&mut self.raw_opponent_board, &mut self.opponent_board);
 		self.update_current();
-
-		self.field.lock().unwrap().current_chain = self.ppc.get_current_chain().unwrap();
-		self.opponent_status = OpponentStatus::new(&self.opponent_board);
-
 		match self.ppc.get_is_movable() {
 			Ok(value) => {
 				self.field.lock().unwrap().is_movable = value;
@@ -133,6 +142,21 @@ impl PpcWrapper {
 				self.field.lock().unwrap().is_movable = false;
 			}
 		}
+
+//		let think = Instant::now();
+
+		let new_current_chain = self.ppc.get_current_chain().unwrap();
+		if self.field.lock().unwrap().current_chain != new_current_chain
+			&& new_current_chain == 1 {
+			//連鎖開始
+			let board_otf = self.ppc.get_board_otf(&mut self.raw_board_otf);
+		}
+		self.field.lock().unwrap().current_chain = new_current_chain;
+
+
+		/*if self.current_frame % 60 == 0 {
+			self.opponent_status = OpponentStatus::new(&self.opponent_board);
+		}*/
 
 
 		self.try_control();
@@ -224,13 +248,18 @@ impl PpcWrapper {
 
 
 	fn try_control(&mut self) {
-		if self.inputs.len() == 0 {
+		if self.inputs.len() == 0 /* || self.origin_pos.is_none()*/ {
 			return;
 		}
 
 		let new_pos = self.field.lock().as_ref().unwrap().current.as_ref().unwrap().clone();
-		if self.ogirin_pos.is_none() {
-			self.ogirin_pos = Some(new_pos.clone());
+		if self.origin_pos.is_none() {
+			if !self.field.lock().unwrap().is_movable {
+				return;
+			}
+
+			self.origin_pos = Some(new_pos.clone());
+			dbg!(&new_pos);
 		}
 		//inputs[0]のやつをxboxの入力に直す
 		let xbox_button = match self.inputs[0] {
@@ -247,22 +276,25 @@ impl PpcWrapper {
 		match xbox_button {
 			XButtons::RIGHT | XButtons::LEFT | XButtons::A | XButtons::B => {
 				if self.pressing {
-					self.controller.release_all();
+					//	println!("離した！");
+					self.controller.as_mut().unwrap().release_all();
 				} else {
-					self.controller.press(XButtons::from(xbox_button));
+					//	println!("押した！");
+					self.controller.as_mut().unwrap().press(XButtons::from(xbox_button));
 				}
 				self.pressing = !self.pressing;
 			}
 			XButtons::X => {
 				if self.pressing {
-					self.controller.release_all();
+					self.controller.as_mut().unwrap().release_all();
 				} else {
-					self.controller.press(XButtons::from(XButtons::A));
+					self.controller.as_mut().unwrap().press(XButtons::from(XButtons::A));
 				}
 				self.pressing = !self.pressing;
 			}
 			XButtons::DOWN => {
-				self.controller.press(XButtons::from(xbox_button));
+				//	println!("長押し");
+				self.controller.as_mut().unwrap().press(XButtons::from(xbox_button));
 			}
 
 			_ => {}
@@ -271,13 +303,13 @@ impl PpcWrapper {
 
 		let result = match xbox_button {
 			XButtons::RIGHT => {
-				self.ogirin_pos.as_ref().unwrap().position.x + 1 == new_pos.position.x
+				self.origin_pos.as_ref().unwrap().position.x + 1 == new_pos.position.x
 			}
 			XButtons::LEFT => {
-				self.ogirin_pos.as_ref().unwrap().position.x - 1 == new_pos.position.x
+				self.origin_pos.as_ref().unwrap().position.x - 1 == new_pos.position.x
 			}
 			XButtons::B => {
-				let mut r = self.ogirin_pos.as_ref().unwrap().rotation.0 as i8;
+				let mut r = self.origin_pos.as_ref().unwrap().rotation.0 as i8;
 				r -= 1;
 				if r == -1 {
 					r = 3;
@@ -287,7 +319,7 @@ impl PpcWrapper {
 				r == new_pos.rotation.0 as i8
 			}
 			XButtons::A => {
-				let mut r = self.ogirin_pos.as_ref().unwrap().rotation.0 as i8;
+				let mut r = self.origin_pos.as_ref().unwrap().rotation.0 as i8;
 				r += 1;
 				if r == 4 {
 					r = 0;
@@ -295,7 +327,7 @@ impl PpcWrapper {
 				r == new_pos.rotation.0 as i8
 			}
 			XButtons::X => {//180回転
-				let mut r = self.ogirin_pos.as_ref().unwrap().rotation.0 as i8;
+				let mut r = self.origin_pos.as_ref().unwrap().rotation.0 as i8;
 				r += 2;
 				r %= 4;
 				r == new_pos.rotation.0 as i8
@@ -315,10 +347,11 @@ impl PpcWrapper {
 		};
 
 		if result {
-			self.controller.release_all();
+			self.controller.as_mut().unwrap().release_all();
 			self.pressing = false;
-			self.ogirin_pos = None;
+			self.origin_pos = None;
 			//dbg!(self.inputs[0]);
+			//	println!("reset");
 			self.inputs.remove(0);
 		}
 	}

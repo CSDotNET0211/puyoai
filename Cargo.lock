@@ -400,6 +400,7 @@ version = "0.1.0"
 dependencies = [
  "proc_mem",
  "strum",
+ "strum_macros",
  "vigem-client",
  "winapi",
 ]
@@ -450,6 +451,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "strum",
+ "vigem-client",
 ]
 
 [[package]]

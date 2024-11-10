@@ -44,6 +44,7 @@ impl<E: Evaluator> BattleEnv<E> {
 	}
 
 	///死んだプレイヤーを判定する、勝ったプレイヤー番号を返す、いなければ-1
+	#[inline]
 	pub fn check_winner(&self) -> i8 {
 		if self.player1.dead {
 			return 2;
@@ -53,7 +54,7 @@ impl<E: Evaluator> BattleEnv<E> {
 
 		-1
 	}
-
+	#[inline]
 	pub unsafe fn update(&mut self) {
 		self.player1.update();
 		self.player2.update();
@@ -73,7 +74,7 @@ impl<E: Evaluator> BattleEnv<E> {
 
 		self.game_frame += 1;
 	}
-
+	#[inline]
 	///イベント処理
 	fn update_player(current_frame: usize, events: &mut VecDeque<Event>) -> bool {
 		while events.len() != 0 {
@@ -101,7 +102,7 @@ impl<E: Evaluator> BattleEnv<E> {
 
 		true
 	}
-
+	#[inline]
 	//指定したプレイヤーのAI操作をします
 	unsafe fn process_key_inputs(player_inputs: &mut VecDeque<KeyType>, env: &mut Env, ai: &mut AI<E>, opponent: &mut Env, opponent_status: &OpponentStatus) {
 		if env.center_puyo == PuyoKind::Empty &&

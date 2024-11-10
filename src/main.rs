@@ -1,29 +1,24 @@
 use std::{fs, thread};
-use std::collections::{HashMap, VecDeque};
 use std::io::stdin;
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "ppc")]
-use ppc::{PpcPuyoKind, scp::Controller, GameState};
-use revonet::ea::{EA, Individual};
+use ppc::scp::Controller;
+use revonet::ea::{EA};
 use revonet::ne::NE;
 use revonet::neuro::MultilayeredNetwork;
 
 use ai::build_ai::AI;
 use ai::evaluator::nn_evaluator::NNEvaluator;
-use ai::evaluator::simple_evaluator::SimpleEvaluator;
-use ai::key_type::KeyType;
 use console::console::Console;
 use env::env::Env;
 use env::puyo_kind::PuyoKind;
-use env::puyo_status::PuyoStatus;
-use env::rotation::Rotation;
-use env::vector2::Vector2;
 
 use crate::battle_env::BattleEnv;
 use crate::log::Log;
 use crate::log::LogType::INFO;
-
+#[cfg(feature = "ppc")]
+use crate::ppc_wrapper::PpcWrapper;
 use crate::problems::battle_problem::BattleProblem;
 
 mod log;
@@ -34,9 +29,6 @@ mod problems;
 mod ppc_wrapper;
 #[cfg(feature = "ppc")]
 mod field;
-
-#[cfg(feature = "ppc")]
-use crate::ppc_wrapper::PpcWrapper;
 
 //use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 //use rand::Rng;
@@ -63,13 +55,13 @@ fn main() {
 		match input.trim() {
 			"1" => {}
 			"2" => {
-				let mut env = env::env::Env::new(&0);
+				let mut env = Env::new(&0);
 				env.init();
 
 				let json_str = fs::read_to_string(r"test.json").unwrap();
 				let net: MultilayeredNetwork = serde_json::from_str(&json_str).unwrap();
 
-				let mut ai = AI::new(NNEvaluator::new(net));
+				let  ai = AI::new(NNEvaluator::new(net));
 
 
 				loop {
@@ -92,68 +84,6 @@ fn main() {
 						input = "ai".parse().unwrap();
 					} else {
 						input = Console::get_input();
-					}
-
-
-					//	let mut input_str = Default::default();
-					//	stdin().read_line(&mut input_str);
-
-					/*match input_str.trim() {
-						"model1" => {
-							ai.style = Style::AttackMain;
-						}
-						"model2" => {}
-						"model3" => {}
-						"model4" => {
-							ai.style = Style::Build;
-						}
-						_ => {}
-					}*/
-					panic!();
-					let start = Instant::now();
-					//			ai.search(&env.board, &env.puyo_status, &next, &env.ojama, env.center_puyo, env.movable_puyo, env.all_cleared, &env.ojama_rate);
-					let duration = start.elapsed();
-
-
-					match input.as_str() {
-						"right" => env.move_right(),
-						"left" => env.move_left(),
-						"drop" => env.quick_drop(None),
-						"cw" => env.rotate_cw(),
-						"ccw" => env.rotate_ccw(),
-						"180" => env.rotate_180(),
-						"ai" => {
-							let path = ai.best_move.as_ref().unwrap();
-							//let mut clear_console_flag = false;
-							for key in path.path.iter() {
-								match key {
-									KeyType::Right => env.move_right(),
-									KeyType::Left => env.move_left(),
-									KeyType::Top => panic!(),
-									KeyType::Down => panic!(),
-									KeyType::Drop => {
-										env.quick_drop(None);
-										//			clear_console_flag = true;
-										break;
-									}
-									KeyType::RotateRight => env.rotate_ccw(),
-									KeyType::RotateLeft => env.rotate_cw(),
-									KeyType::Rotate180 => { env.rotate_180() }
-								}
-
-								Console::print(&env, 0, true, false);
-
-								thread::sleep(Duration::from_millis(100));
-							}
-
-							//	println!("{:?}", ai.debug);
-							//		println!("{:?}", ai.best_move);
-							println!("elapsed time: {:?}", duration);
-							println!("score: {:?}", env.current_score);
-							println!("frame: {:?}", env.current_frame);
-							thread::sleep(Duration::from_millis(1000));
-						}
-						_ => {}
 					}
 				}
 			}
@@ -287,35 +217,38 @@ unsafe fn ppc() {
 	//		let mut scp2 = ScpBus::new().unwrap();
 	//		let controller = scp2.plug_in(1).unwrap();
 	//		thread::sleep(Duration::from_secs(1000));
-	let mut scp = Controller::new();
+	let  scp = Controller::new();
+	//let  scp2 = Controller::new();
 	//let mut controller = ppc::controller::Controller::new();
-	let mut ppc = PpcWrapper::new(0, 0, scp);
-	ppc.connect();
+	let mut ppc_player1 = PpcWrapper::new(0, 0, Some(scp));
+	let mut ppc_player2 = PpcWrapper::new(1, 0, None);
+	ppc_player1.connect();
+	ppc_player2.connect();
 //	ppc.on_complete_action = Some(Box::new(test));
 //	ppc.on_gamestate_changed = Some(Box::new(test2));
 
 	//こっちでupdate回す
 	loop {
-		ppc.update();
-		if ppc.field.lock().unwrap().current.is_some() &&
-			ppc.field.lock().unwrap().is_movable &&
-			ppc.inputs.len() == 0 {
-			if ppc.field.lock().unwrap().current.as_ref().unwrap().position.y != 12 {
+		ppc_player1.update();
+		//println!("{:?}",ppc_player1.field.lock().unwrap().is_movable );
+		if ppc_player1.field.lock().unwrap().current.is_some() &&
+			ppc_player1.field.lock().unwrap().is_movable &&
+			ppc_player1.inputs.len() == 0 {
+
+
+			//thread::sleep(Duration::from_millis(2));
+			let field_lock = ppc_player1.field.lock();
+			let field = field_lock.as_ref().unwrap();
+
+			if field.current.as_ref().unwrap().position.x != 3 {
 				continue;
 			}
 
-			thread::sleep(Duration::from_micros(500));
-			let field_lock = ppc.field.lock();
-			let field = field_lock.as_ref().unwrap();
-
+			//dbg!(&field.current);
 			let mut next = Vec::new();
 
-			//let next1 = field.next[0].0;
 			next.push(field.next[0].0);
 			next.push(field.next[0].1);
-
-			//		println!("読み");
-
 
 			let mut env = Env::new(&0);
 			env.board = field.board.clone();
@@ -324,220 +257,46 @@ unsafe fn ppc() {
 			env.center_puyo = field.center_puyo;
 			env.puyo_status = field.current.as_ref().unwrap().clone();
 
-
-			//	dbg!(ppc.inputs);
-			ai.search(&field.board, &field.current.as_ref().unwrap(), &next, &ppc.ojama_status, field.center_puyo, field.movable_puyo, false, &70, &ppc.opponent_status);
-
-			ppc.inputs = ai.best_move.as_ref().unwrap().path.clone();
-			//let mut inputs = Vec::new();
-			//dbg!(&ppc.inputs);
-			match &ai.best_move.as_ref() {
-				None => { println!("もう無理...") }
-				Some(result) => {
-					for input in &result.path {
-						//	inputs.push(convert_key_input(input));
-
-						match input {
-							KeyType::Right => env.move_right(),
-							KeyType::Left => env.move_left(),
-							KeyType::Top => panic!(),
-							KeyType::Down => panic!(),
-							KeyType::Drop => {
-								env.quick_drop(None);
-
-								Console::print(&env, 0, true, false);
-								//	thread::sleep(Duration::from_millis(100));
-								break;
-							}
-							KeyType::RotateRight => env.rotate_ccw(),//これ逆で作られてるんだよな
-							KeyType::RotateLeft => env.rotate_cw(),
-							KeyType::Rotate180 => env.rotate_180()
-						}
-						//	
-						//		thread::sleep(Duration::from_millis(100));
-					}
-				}
-			}
+			ai.search(&field.board, &field.current.as_ref().unwrap(), &next, &ppc_player1.ojama_status, field.center_puyo, field.movable_puyo, false, &70, &ppc_player1.opponent_status);
 			//	Console::print(&env, 0, true, false);
-			//	a
-
+			//	dbg!(&ppc_player1.inputs);
+			ppc_player1.inputs = ai.best_move.as_ref().unwrap().path.clone();
+			//ppc_player1.origin_pos = Some(field.current.as_ref().unwrap().clone());
+			//dbg!(&ppc_player1.origin_pos);
+			/*
+					match &ai.best_move.as_ref() {
+						None => { println!("もう無理...") }
+						Some(result) => {
+							for input in &result.path {
+								//	inputs.push(convert_key_input(input));
+		
+								match input {
+									KeyType::Right => env.move_right(),
+									KeyType::Left => env.move_left(),
+									KeyType::Top => panic!(),
+									KeyType::Down => panic!(),
+									KeyType::Drop => {
+										env.quick_drop(None);
+		
+										Console::print(&env, 0, true, false);
+										//	thread::sleep(Duration::from_millis(100));
+										break;
+									}
+									KeyType::RotateRight => env.rotate_ccw(),//これ逆で作られてるんだよな
+									KeyType::RotateLeft => env.rotate_cw(),
+									KeyType::Rotate180 => env.rotate_180()
+								}
+								//	
+								//		thread::sleep(Duration::from_millis(100));
+							}
+						}
+					}
+			*/
 			//	println!("{:?}",ppc.inputs);
 		}
 
 
-		thread::sleep(Duration::from_micros(300));
+		thread::sleep(Duration::from_millis(2));
 	}
 
-
-	/*let mut puyo_mapping = HashMap::new();
-	puyo_mapping.insert(PpcPuyoKind::Null, PuyoKind::Empty);
-	puyo_mapping.insert(PpcPuyoKind::Garbage, PuyoKind::Ojama);
-
-	let mut env = Env::new(&0);
-	env.init();*/
-
-	/*let mut prev = 0;
-	loop {
-		let a = controller.get_frame();
-		if a != prev {
-			println!("{}", a);
-			prev = a;
-		}
-
-
-		thread::sleep(Duration::from_micros(100));
-	}*/
-
-	let json_str = fs::read_to_string("./test.json").unwrap();
-	let net: MultilayeredNetwork = serde_json::from_str(&json_str).unwrap();
-
-
-	//let mut ai = AI::new(SimpleEvaluator::new([3., 5., 10., 18., 26., -15., -10.4, -0.2]));
-	let mut ai = AI::new(NNEvaluator::new(net));
-
-	/*loop {
-		loop {
-			let state = controller.ppc.get_movable_state();
-
-			let result = match state {
-				Ok(state) => { state }
-				Err(_) => {
-					false
-				}
-			};
-
-			if result == false {
-				thread::sleep(Duration::from_micros(50));
-			} else {
-				break;
-			}
-		}
-
-		let next = controller.get_next();
-		let mut i = 0;
-		for next_puyo in [next[0].0, next[0].1, next[1].0, next[1].1] {
-			//mappingを作成
-
-			let puyo = check_and_register_using_puyos(&next_puyo, &mut left_puyos, &mut puyo_mapping);
-			env.next[i / 2][i % 2] = puyo;
-			i += 1;
-		}
-
-		//let mut dest_board = unsafe { Board::new() };
-		let board = controller.get_board();
-		for y in 1..=13 {
-			for x in 0..6 {
-				let raw_puyo = &board[(x + (y) * 6) as usize];
-				env.board.set_flag(x + 1, 14 - (y + 1) + 1, &check_and_register_using_puyos(&raw_puyo, &mut left_puyos, &mut puyo_mapping));
-			}
-		}
-
-		for x in 0..6 {
-			let raw_puyo = &board[(x + 0 * 6) as usize];
-			env.board.set_flag(x + 1, 14, &check_and_register_using_puyos(&raw_puyo, &mut left_puyos, &mut puyo_mapping));
-		}
-
-
-		let current;
-		loop {
-			while controller.get_movable_state() != Ok(true) { thread::sleep(Duration::from_micros(100)); }
-			let temp_current = controller.get_current();
-			match temp_current {
-				Ok(value) => {
-					current = value;
-					break;
-				}
-				Err(_) => { let _ = Duration::from_micros(100); }
-			}
-		}
-
-		let rotation = match current.rotation {
-			0 => Rotation(3),
-			1 => Rotation(2),
-			2 => Rotation(1),
-			3 => Rotation(0),
-			_ => { panic!() }
-		};
-
-		//		unsafe { env.board.set_flag(current.position.0 + 1, current.position.1, &PuyoKind::Empty); }
-		// unsafe { env.board.set_flag(current.position.0 + ROTATE_DIFF[current.rotation as usize][0] + 1, current.position.1 + ROTATE_DIFF[current.rotation as usize][1], &PuyoKind::Empty); }
-
-
-		env.puyo_status = PuyoStatus::new(Vector2::new(current.position.0, 16 - current.position.1 - 1), rotation);
-
-		env.movable_puyo = check_and_register_using_puyos(&current.movable_puyo, &mut left_puyos, &mut puyo_mapping);
-		env.center_puyo = check_and_register_using_puyos(&current.center_puyo, &mut left_puyos, &mut puyo_mapping);
-
-		let mut next = Vec::new();
-		for next_p2 in env.next[0] {
-			next.push(next_p2);
-		}
-		for next_p2 in env.next[1] {
-			next.push(next_p2);
-		}
-
-
-		let start = Instant::now();
-		ai.search(&env.board, &env.puyo_status, &next, env.center_puyo, env.movable_puyo, 0);
-		let duration = start.elapsed();
-		println!("think time:{:?}", duration);
-		println!("current frame:{:?}", env.current_frame);
-		println!("current score:{:?}", env.current_score);
-
-		let mut inputs = Vec::new();
-		match &ai.best_move.as_ref() {
-			None => { println!("もう無理...") }
-			Some(result) => {
-				for input in &result.path {
-					inputs.push(convert_key_input(input));
-
-					match input {
-						KeyType::Right => env.move_right(),
-						KeyType::Left => env.move_left(),
-						KeyType::Top => panic!(),
-						KeyType::Down => panic!(),
-						KeyType::Drop => {
-							env.quick_drop(None);
-
-							Console::print(&env, 0, true, false);
-							thread::sleep(Duration::from_millis(100));
-							break;
-						}
-						KeyType::RotateRight => env.rotate_ccw(),//これ逆で作られてるんだよな
-						KeyType::RotateLeft => env.rotate_cw(),
-						KeyType::Rotate180 => env.rotate_180()
-					}
-					//	
-					//		thread::sleep(Duration::from_millis(100));
-				}
-			}
-		}
-
-		Console::print(&env, 0, true, false);
-		println!("{:?}", inputs);
-
-		controller.operate(&inputs, &mut scp);
-
-
-//					thread::sleep(Duration::from_millis(1000));
-
-
-		//Console::print(&env, false, false);
-		//
-	}*/
-
-	/*#[cfg(feature = "ppc")]
-	fn test(ppc_wrapper: &mut PpcWrapper) {}
-
-	#[cfg(feature = "ppc")]
-	fn test2(new_state: GameState, ppc_wrapper: &mut PpcWrapper) {
-		match new_state {
-			GameState::Idle => {}
-			GameState::Start => {
-				//reset game
-				ppc_wrapper.clear_puyo_info();
-			}
-			GameState::End => {}
-		}
-	}*/
 }

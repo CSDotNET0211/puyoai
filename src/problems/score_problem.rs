@@ -5,7 +5,6 @@ use revonet::neuro::{ActivationFunctionType, MultilayeredNetwork, NeuralArchitec
 use ai::build_ai::AI;
 use ai::evaluator::nn_evaluator::NNEvaluator;
 use ai::key_type::KeyType;
-use ai::opponent_status;
 use ai::opponent_status::OpponentStatus;
 use env::env::Env;
 

@@ -1,4 +1,4 @@
-﻿use std::arch::x86_64::{__m128i, _mm_andnot_si128, _mm_set_epi64x, _mm_setzero_si128, _mm_store_si128};
+﻿use std::arch::x86_64::{__m128i, _mm_and_si128, _mm_andnot_si128, _mm_cvtsi128_si64, _mm_extract_epi64, _mm_set_epi64x, _mm_setzero_si128, _mm_store_si128, _mm_xor_si128, _popcnt64};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -79,7 +79,7 @@ impl<E: Evaluator> AI<E> {
 		//potential.board,
 		let mut rng = thread_rng();
 
-		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate, &mut rng, &potential, opponent_status);
+		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate, &mut rng, &potential, opponent_status, 0);
 
 		if let Some(pos) = self.best_move.as_mut().unwrap().path.iter().position(|&x| x == Drop) {
 			let mut new = self.best_move.clone().unwrap().path;
@@ -93,24 +93,37 @@ impl<E: Evaluator> AI<E> {
 		let mut best_potential = Potential::default();
 		let mut best_potential_count = 0;
 
-		let mut eval = |board: &Board, heights: &[u16; 8], added_count: &u8| {
+		let mut eval = |board: &Board, put_board: &Board, heights: &[u16; 8], added_count: &u8, ignite_pos: Vector2| {
 			let mut potential = Potential::default();
 			let mut chain = 0;
 			let mut cleared_pos_flag = 0;
 
-			Self::simulate(board, &mut chain, &mut cleared_pos_flag);
+			Self::simulate(put_board, &mut chain, &mut cleared_pos_flag);
 
-			Self::get_potential_chain(&board, &heights, &0, &cleared_pos_flag, 1 + *added_count, &mut potential);
+			//置く前と置いた後の差分で置いた場所を取得
+			let diff_board = _mm_xor_si128(board.get_not_empty_board().0, put_board.get_not_empty_board().0);
+			//置いた場所を一回り拡張
+			let neighbor_mask = BoardBit(diff_board).expand_1_without_mask();
+			//置いた後のboardとand演算して置いてある場所を列挙
+			let neighbor_flag = _mm_and_si128(neighbor_mask.0, put_board.get_not_empty_board().0);
+			let empty_count = neighbor_mask.popcnt128() - BoardBit(neighbor_flag).popcnt128();
+
+
+			Self::get_potential_chain(&put_board, &heights, &0, &cleared_pos_flag, 1 + *added_count, &mut potential);
 			if best_potential.chain > potential.chain {
 				best_potential.chain = potential.chain;
 				best_potential.added_count = potential.added_count;
-				best_potential.diff_board = board.clone();
+				best_potential.diff_board = put_board.clone();
+				best_potential.empty_around_count = empty_count as u8;
+				best_potential.added_pos = ignite_pos;
 				best_potential_count = 1;
 			} else if best_potential.chain == potential.chain {
 				if best_potential.added_count < potential.added_count {
 					best_potential.chain = potential.chain;
 					best_potential.added_count = potential.added_count;
-					best_potential.diff_board = board.clone();
+					best_potential.diff_board = put_board.clone();
+					best_potential.empty_around_count = empty_count as u8;
+					best_potential.added_pos = ignite_pos;
 					best_potential_count = 1;
 				} else if best_potential.added_count == potential.added_count {
 					best_potential.added_count += 1;
@@ -135,7 +148,8 @@ impl<E: Evaluator> AI<E> {
 						board_clone.put_puyo_direct(&x, &mut heights, &puyo_type);
 					}
 
-					eval(&board_clone, &heights, &puyo_count);
+
+					eval(board, &board_clone, &heights, &puyo_count, Vector2::new(x as i8, heights[x as usize] as i8));
 				}
 			}
 		}
@@ -153,7 +167,7 @@ impl<E: Evaluator> AI<E> {
 					}
 					board_clone.put_puyo_direct(&(x + x_diff), &mut heights, &puyo_type);
 				}
-				eval(&board_clone, &heights, &2);
+				eval(board, &board_clone, &heights, &2, Vector2::new(x as i8, heights[x as usize] as i8));
 			}
 		}
 
@@ -175,6 +189,7 @@ impl<E: Evaluator> AI<E> {
 							  rng: &mut ThreadRng,
 							  best_potential: &Potential,
 							  opponent_status: &OpponentStatus,
+							  mut waste_chain_link: usize,
 	) {
 		let mut places: HashMap<u16, (u8, PuyoStatus)> = HashMap::new();
 		let mut hash_position = HashMap::new();
@@ -191,10 +206,11 @@ impl<E: Evaluator> AI<E> {
 				new_board_sim.try_put_ojama(&mut ojama_clone, rng);
 			}
 
-			let mut waste_chain_link = 0;
+			//	let mut waste_chain_link = 0;
 
 			let mut new_score = score;
 			let mut chain = 0u8;
+			let mut chain_one_side = 0u8;
 
 			let mut erase_mask = BoardBit::default();
 			loop {
@@ -203,7 +219,21 @@ impl<E: Evaluator> AI<E> {
 					break;
 				}
 
-				new_board_sim.drop_after_erased(&erase_mask);
+				let board_popcount = erase_mask.popcnt128();
+				let left_popcount = _popcnt64(_mm_extract_epi64::<0>(erase_mask.0));
+				let right_popcount = _popcnt64(_mm_extract_epi64::<1>(erase_mask.0));
+
+				if board_popcount == left_popcount
+					|| board_popcount == right_popcount {
+					chain_one_side += 1;
+				}
+
+				elapsed_frame += FrameNeeded::VANISH_PUYO_ANIMATION;
+				let drop_count = new_board_sim.drop_after_erased(&erase_mask);
+				if drop_count > 0 {
+					elapsed_frame += drop_count as usize * FrameNeeded::TEAR_PUYO_DROP_PER_1_BLOCK;
+					elapsed_frame += FrameNeeded::LAND_PUYO_ANIMATION;
+				}
 
 
 				chain += 1;
@@ -229,6 +259,7 @@ impl<E: Evaluator> AI<E> {
 
 			let calculated_movement = Self::calculate_move(&hash_position, &place.1.1, current.position.x, current.position.y, current.rotation);
 
+			//TODO: 
 			elapsed_frame += calculated_movement.len() * FrameNeeded::MOVE;
 
 			let mut new_movements = movements.clone();
@@ -245,10 +276,10 @@ impl<E: Evaluator> AI<E> {
 				let new_movable_puyo = new_next.pop().unwrap();
 
 
-				self.search_internal(&new_board_sim, &new_current, &new_next, &ojama_clone, new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate, rng, best_potential, opponent_status);
+				self.search_internal(&new_board_sim, &new_current, &new_next, &ojama_clone, new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate, rng, best_potential, opponent_status, waste_chain_link);
 			} else {
 				let mut debug = Debug::new();
-				let eval = self.evaluator.evaluate(&new_board, &new_board_sim, &chain, &new_score, &0, &mut debug, &ojama_clone, ojama_rate, best_potential, opponent_status, &waste_chain_link);
+				let eval = self.evaluator.evaluate(&new_board, &new_board_sim, &chain, &new_score, &0, &mut debug, &ojama_clone, ojama_rate, best_potential, opponent_status, &waste_chain_link, &chain_one_side);
 
 				//highest_evalよりも評価が高かったら、計算したpath、
 				if self.best_move == None || self.best_move.as_ref().unwrap().eval < eval {
@@ -577,6 +608,8 @@ impl<E: Evaluator> AI<E> {
 							chain: test_chain,
 							added_count: added_count,
 							diff_board: test_board,
+							empty_around_count: 0,
+							added_pos: Vector2::default(),
 						};
 					}
 				}

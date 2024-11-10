@@ -1,23 +1,19 @@
-﻿use std::arch::x86_64::{__m128i, _mm_and_si128, _mm_andnot_si128, _mm_extract_epi64, _mm_or_si128, _mm_set_epi64x, _mm_slli_epi16, _mm_slli_si128, _mm_srli_epi16, _mm_srli_si128, _mm_store_si128, _popcnt32, _popcnt64};
-use std::collections::BTreeMap;
-use std::mem::transmute;
+﻿use std::arch::x86_64::{_mm_and_si128, _mm_andnot_si128, _mm_extract_epi64, _mm_or_si128, _mm_set_epi64x, _mm_slli_epi16, _mm_slli_si128, _mm_srli_epi16, _mm_srli_si128, _popcnt64};
 
 use revonet::neuro::NeuralNetwork;
 
-use env::board::{Board, WIDTH_WITH_BORDER};
+use env::board::Board;
 use env::board_bit::BoardBit;
 use env::env::DEAD_POSITION;
 use env::ojama_status::OjamaStatus;
 use env::puyo_kind::{COLOR_PUYOS, PuyoKind};
-use env::split_board::SplitBoard;
-use crate::build_ai::AI;
 
 use crate::debug::Debug;
 use crate::evaluator::Evaluator;
-use crate::ignite_key::IgniteKey;
 use crate::opener_book::Template;
 use crate::opponent_status::OpponentStatus;
 use crate::potential::Potential;
+
 /*pub static DIRECTIONS: [(i32, i32); 4] = [
 	(1, 0),   // 右
 	(-1, 0),  // 左
@@ -32,7 +28,19 @@ pub struct NNEvaluator<T: NeuralNetwork> {
 
 
 impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
-	fn evaluate(&mut self, board: &Board, sim_board: &Board, chain: &u8, score: &usize, elapse_frame: &u32, debug: &mut Debug, ojama: &OjamaStatus, ojama_rate: &usize, best_potential: &Potential, opponent_status: &OpponentStatus, waste_chain_link: &usize) -> f32 {
+	fn evaluate(&mut self,
+				board: &Board,
+				sim_board: &Board,
+				chain: &u8,
+				score: &usize,
+				elapse_frame: &u32,
+				debug: &mut Debug,
+				ojama: &OjamaStatus,
+				ojama_rate: &usize,
+				best_potential: &Potential,
+				opponent_status: &OpponentStatus,
+				waste_chain_link: &usize,
+				one_side_chain_count: &u8) -> f32 {
 		unsafe {
 			if !sim_board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				debug.dead = true;
@@ -123,7 +131,10 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 				height[5] as f32,
 				height[6] as f32,
 				*waste_chain_link as f32,
-				
+				*one_side_chain_count as f32,
+				best_potential.empty_around_count as f32,
+				best_potential.added_pos.x as f32,
+				best_potential.added_pos.y as f32
 			]);
 
 			result[0]

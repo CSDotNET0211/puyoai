@@ -8,6 +8,7 @@ use env::puyo_kind::COLOR_PUYOS;
 pub struct Template(pub Box<[__m128i]>);
 
 impl Template {
+	#[inline]
 	pub unsafe fn evaluate(&self, board: &Board) -> u8 {
 		let mut match_score: u8 = 0;
 

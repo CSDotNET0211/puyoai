@@ -81,6 +81,7 @@ impl BoardBit {
 	pub fn mask(&self, mask: &BoardBit) -> BoardBit {
 		*self & *mask
 	}
+	///元のフラグに隣接してるやつを全列挙　マインスイーパーの空白空けるやつみたいな
 	#[inline]
 	pub unsafe fn expand(&self, mask: BoardBit) -> BoardBit {
 		let mut seed = self.0;
@@ -99,7 +100,7 @@ impl BoardBit {
 			seed = expanded;
 		}
 	}
-
+	//フラグを一回り拡張
 	#[inline]
 	pub unsafe fn expand_1(&self, mask: &BoardBit) -> BoardBit {
 		let v1 = self.l_shift();

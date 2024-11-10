@@ -1,6 +1,5 @@
 pub use env::puyo_kind;
 
-pub mod ignite_key;
 pub mod evaluator;
 pub mod build_ai;
 pub mod ai_move;
