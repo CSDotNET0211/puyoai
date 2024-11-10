@@ -59,7 +59,7 @@ impl<E: Evaluator> BattleEnv<E> {
 		self.player1.update();
 		self.player2.update();
 
-		if self.game_frame % 10 == 0 {
+		if self.game_frame % 60 == 0 {
 			self.player1_opponent_status = OpponentStatus::new(&self.player2.board);
 			self.player2_opponent_status = OpponentStatus::new(&self.player1.board);
 		}

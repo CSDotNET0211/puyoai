@@ -61,7 +61,7 @@ fn main() {
 				let json_str = fs::read_to_string(r"test.json").unwrap();
 				let net: MultilayeredNetwork = serde_json::from_str(&json_str).unwrap();
 
-				let  ai = AI::new(NNEvaluator::new(net));
+				let ai = AI::new(NNEvaluator::new(net));
 
 
 				loop {
@@ -214,12 +214,9 @@ unsafe fn ppc() {
 	let mut ai = AI::new(NNEvaluator::new(net));
 
 
-	//		let mut scp2 = ScpBus::new().unwrap();
-	//		let controller = scp2.plug_in(1).unwrap();
-	//		thread::sleep(Duration::from_secs(1000));
-	let  scp = Controller::new();
-	//let  scp2 = Controller::new();
-	//let mut controller = ppc::controller::Controller::new();
+	let scp = Controller::new();
+	thread::sleep(Duration::from_millis(2));
+
 	let mut ppc_player1 = PpcWrapper::new(0, 0, Some(scp));
 	let mut ppc_player2 = PpcWrapper::new(1, 0, None);
 	ppc_player1.connect();
@@ -298,5 +295,4 @@ unsafe fn ppc() {
 
 		thread::sleep(Duration::from_millis(2));
 	}
-
 }

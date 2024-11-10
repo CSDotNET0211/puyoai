@@ -154,9 +154,9 @@ impl PpcWrapper {
 		self.field.lock().unwrap().current_chain = new_current_chain;
 
 
-		/*if self.current_frame % 60 == 0 {
+		if self.current_frame % 60 == 0 {
 			self.opponent_status = OpponentStatus::new(&self.opponent_board);
-		}*/
+		}
 
 
 		self.try_control();
