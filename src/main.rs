@@ -113,7 +113,7 @@ fn main() {
 				log.write(INFO, "Training started");
 
 
-				let setting = revonet::settings::EASettings::new(64, 999999999, 26);
+				let setting = revonet::settings::EASettings::new(64, 999999999, 30);
 				//let problem = ScoreProblem::new();
 				let problem = BattleProblem::new();
 				let mut ne: NE<BattleProblem> = NE::new(&problem);
