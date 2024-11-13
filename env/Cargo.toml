@@ -9,3 +9,4 @@ log = "0.4.22"
 anyhow = "1.0.75"
 strum = { version = "0.26.3", features = ["derive"] }
 num = "0.4.3"
+fastrand="2.2.0"

@@ -29,7 +29,16 @@ impl OpponentStatus {
 
 		opponent_status
 	}
-
+	
+	pub fn clone(&self)->Self{
+		Self {
+			board_height: self.board_height,
+			instant_attack: self.instant_attack,
+			board_ojama_count: self.board_ojama_count,
+			potential_chain_count: self.potential_chain_count,
+			potential_added_count: self.potential_added_count,
+		}
+	}
 	pub fn default() -> Self {
 		OpponentStatus {
 			board_height: 0,

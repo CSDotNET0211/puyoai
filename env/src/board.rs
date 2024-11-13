@@ -2,6 +2,7 @@
 use std::mem;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
+use rand::thread_rng;
 
 use crate::board_bit::BoardBit;
 use crate::env::{MAX_OJAMA_RECEIVE_COUNT, OJAMA_POS};
@@ -154,7 +155,7 @@ impl Board {
 		}*/
 
 	#[inline]
-	pub unsafe fn try_put_ojama(&mut self, ojama: &mut OjamaStatus, rng: &mut ThreadRng) {
+	pub unsafe fn try_put_ojama(&mut self, ojama: &mut OjamaStatus/*, rng: &mut ThreadRng*/) {
 		let mut ojama_to_receive = ojama.get_receivable_ojama_size();
 
 		if ojama_to_receive > MAX_OJAMA_RECEIVE_COUNT {
@@ -186,7 +187,7 @@ impl Board {
 		}
 
 		let ojama_pos_slice = &OJAMA_POS;  // Borrow the slice here to extend its lifetime
-		let selected_columns = ojama_pos_slice.choose_multiple(rng, (ojama_to_receive % crate::env::WIDTH));
+		let selected_columns = ojama_pos_slice.choose_multiple(&mut thread_rng(), (ojama_to_receive % crate::env::WIDTH));
 
 		self.0[0] = _mm_load_si128(v1.0.as_ptr() as *const __m128i);
 		self.0[1] = _mm_load_si128(v2.0.as_ptr() as *const __m128i);

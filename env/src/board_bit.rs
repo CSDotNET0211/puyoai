@@ -157,9 +157,9 @@ impl BoardBit {
 	}
 	#[inline]
 	pub unsafe fn popcnt128(&self) -> i32 {
-		let low = _mm_cvtsi128_si64(self.0); // 下位64ビットを抽出
-		let shifted = _mm_srli_si128::<8>(self.0); // 128ビット右に8バイトシフト
-		let high = _mm_cvtsi128_si64(shifted); // 上位64ビットを抽出
+		let low = _mm_cvtsi128_si64(self.0); 
+		let shifted = _mm_srli_si128::<8>(self.0); 
+		let high = _mm_cvtsi128_si64(shifted); 
 
 
 		_popcnt64(low) + _popcnt64(high)

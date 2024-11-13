@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::sync::LazyLock;
 
 use rand::prelude::SliceRandom;
-use rand::rngs::ThreadRng;
+//use rand::rngs::{SmallRng, ThreadRng};
 use rand::thread_rng;
 
 use crate::board::{Board, WIDTH_WITH_BORDER};
@@ -92,7 +92,7 @@ pub struct Env {
 	pub ojama: OjamaStatus,
 	pub all_cleared: bool,
 	pub dead: bool,
-	rng: ThreadRng,
+//	rng: SmallRng,
 	bag: VecDeque<PuyoKind>,
 	rand: u32,
 	pub debug_status: DebugStatus,
@@ -114,7 +114,7 @@ impl Env {
 			ojama: OjamaStatus(0),
 			all_cleared: false,
 			//queue_rng: StdRng::seed_from_u64(*seed),
-			rng: thread_rng(),
+		//	rng: thread_rng(),
 			dead: false,
 			bag: VecDeque::with_capacity(256),
 			rand: *seed,
@@ -196,7 +196,7 @@ impl Env {
 		self.debug_status.current_chain_count = 0;
 
 		if self.ojama.get_receivable_ojama_size() != 0 {
-			self.board.try_put_ojama(&mut self.ojama, &mut self.rng);
+			self.board.try_put_ojama(&mut self.ojama/*, &mut self.rng*/);
 		}
 
 		if !self.board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {

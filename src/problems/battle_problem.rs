@@ -28,7 +28,9 @@ impl NeuroProblem for BattleProblem {
 		let mut rng1 = thread_rng();
 		let mut net: MultilayeredNetwork = MultilayeredNetwork::new(self.get_inputs_num(), self.get_outputs_num());
 		net.add_hidden_layer(20usize, ActivationFunctionType::Relu)
-			.add_hidden_layer(5usize, ActivationFunctionType::Relu)
+			.add_hidden_layer(15usize, ActivationFunctionType::Relu)
+			.add_hidden_layer(15usize, ActivationFunctionType::Relu)
+			.add_hidden_layer(10usize, ActivationFunctionType::Relu)
 			.build(&mut rng1, NeuralArchitecture::Multilayered);
 
 		net

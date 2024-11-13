@@ -1,5 +1,6 @@
 use std::{fs, thread};
 use std::io::stdin;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 #[cfg(feature = "ppc")]
@@ -10,6 +11,7 @@ use revonet::neuro::MultilayeredNetwork;
 
 use ai::build_ai::AI;
 use ai::evaluator::nn_evaluator::NNEvaluator;
+use ai::opponent_status::OpponentStatus;
 use console::console::Console;
 use env::env::Env;
 use env::puyo_kind::PuyoKind;
@@ -213,86 +215,86 @@ unsafe fn ppc() {
 	let net: MultilayeredNetwork = serde_json::from_str(&json_str).unwrap();
 	let mut ai = AI::new(NNEvaluator::new(net));
 
+	//let a = Arc::new(Mutex::new(Env::new(&0)));
 
 	let scp = Controller::new();
 	thread::sleep(Duration::from_millis(2));
 
-	let mut ppc_player1 = PpcWrapper::new(0, 0, Some(scp));
-	let mut ppc_player2 = PpcWrapper::new(1, 0, None);
-	ppc_player1.connect();
-	ppc_player2.connect();
-//	ppc.on_complete_action = Some(Box::new(test));
-//	ppc.on_gamestate_changed = Some(Box::new(test2));
+	let mut ppc_player = Arc::new(Mutex::new(PpcWrapper::new(0, Some(scp))));
+	let mut ppc_opponent = Arc::new(Mutex::new(PpcWrapper::new(1, None)));
 
-	//こっちでupdate回す
-	loop {
-		ppc_player1.update();
-		//println!("{:?}",ppc_player1.field.lock().unwrap().is_movable );
-		if ppc_player1.field.lock().unwrap().current.is_some() &&
-			ppc_player1.field.lock().unwrap().is_movable &&
-			ppc_player1.inputs.len() == 0 {
+	let mut ppc_opponent_status = Arc::new(Mutex::new(OpponentStatus::default()));
+	let mut ppc_player_clone = ppc_player.clone();
+	let mut ppc_opponent_status_clone = ppc_opponent_status.clone();
+	ppc_player.lock().unwrap().connect();
+	ppc_opponent.lock().unwrap().connect();
+	
+	let mut ppc_opponent_clone = ppc_opponent.clone();
+	let mut timer = Instant::now();
+	let interval = Duration::from_secs(1);
+
+	let opponent_handle = thread::spawn(move || {
+		loop {
+			ppc_opponent_clone.clone().lock().unwrap().update(ppc_player_clone.clone());
+			thread::sleep(Duration::from_millis(2));
+
+			let now = Instant::now();
+			if now.duration_since(timer) >= interval {
+				*ppc_opponent_status_clone.lock().unwrap() = OpponentStatus::new(&ppc_opponent_clone.clone().lock().unwrap().env.board.clone());
+
+				timer = now;
+			}
+		}
+	});
+
+	let mut ppc_opponent_clone = ppc_opponent.clone();
+	let player_handle = thread::spawn(move || {
+		loop {
+			let mut ppc_player = ppc_player.lock().unwrap();
+
+			ppc_player.update(ppc_opponent_clone.clone());
+			
+			if //ppc_player1.field.lock().unwrap().current.is_some() &&
+			ppc_player.is_movable &&
+				ppc_player.inputs.len() == 0 {
 
 
-			//thread::sleep(Duration::from_millis(2));
-			let field_lock = ppc_player1.field.lock();
-			let field = field_lock.as_ref().unwrap();
+				//thread::sleep(Duration::from_millis(2));
+				//let field_lock = ppc_player.field.lock();
+				//	let field = field_lock.as_ref().unwrap();
 
-			if field.current.as_ref().unwrap().position.x != 3 {
-				continue;
+				//if ppc_player.lock().unwrap().env.puyo_status.position.x != 3 {
+				if ppc_player.env.center_puyo == PuyoKind::Empty {
+					continue;
+				}
+
+				//dbg!(&field.current);
+				let mut next = Vec::new();
+
+				next.push(ppc_player.env.next[0][0]);
+				next.push(ppc_player.env.next[0][1]);
+
+				ai.search(&ppc_player.env.board,
+						  &ppc_player.env.puyo_status,
+						  &next,
+						  &ppc_player.env.ojama,
+						  ppc_player.env.center_puyo,
+						  ppc_player.env.movable_puyo,
+						  false,
+						  &ppc_player.env.ojama_rate,
+						  &ppc_opponent_status.lock().unwrap().clone());
+				ppc_player.inputs = ai.best_move.as_ref().unwrap().path.clone();
 			}
 
-			//dbg!(&field.current);
-			let mut next = Vec::new();
 
-			next.push(field.next[0].0);
-			next.push(field.next[0].1);
+			Console::print(&ppc_player.env, 0, false, false);
+			//		println!("current_ojama:{:?}", &battle.player1.ojama.get_raw());
+			Console::print(&ppc_opponent_clone.lock().unwrap().env, 1, false, false);
 
-			let mut env = Env::new(&0);
-			env.board = field.board.clone();
-			env.next[0] = [field.next[0].0, field.next[0].0];
-			env.movable_puyo = field.movable_puyo;
-			env.center_puyo = field.center_puyo;
-			env.puyo_status = field.current.as_ref().unwrap().clone();
-
-			ai.search(&field.board, &field.current.as_ref().unwrap(), &next, &ppc_player1.ojama_status, field.center_puyo, field.movable_puyo, false, &70, &ppc_player1.opponent_status);
-			//	Console::print(&env, 0, true, false);
-			//	dbg!(&ppc_player1.inputs);
-			ppc_player1.inputs = ai.best_move.as_ref().unwrap().path.clone();
-			//ppc_player1.origin_pos = Some(field.current.as_ref().unwrap().clone());
-			//dbg!(&ppc_player1.origin_pos);
-			/*
-					match &ai.best_move.as_ref() {
-						None => { println!("もう無理...") }
-						Some(result) => {
-							for input in &result.path {
-								//	inputs.push(convert_key_input(input));
-		
-								match input {
-									KeyType::Right => env.move_right(),
-									KeyType::Left => env.move_left(),
-									KeyType::Top => panic!(),
-									KeyType::Down => panic!(),
-									KeyType::Drop => {
-										env.quick_drop(None);
-		
-										Console::print(&env, 0, true, false);
-										//	thread::sleep(Duration::from_millis(100));
-										break;
-									}
-									KeyType::RotateRight => env.rotate_ccw(),//これ逆で作られてるんだよな
-									KeyType::RotateLeft => env.rotate_cw(),
-									KeyType::Rotate180 => env.rotate_180()
-								}
-								//	
-								//		thread::sleep(Duration::from_millis(100));
-							}
-						}
-					}
-			*/
-			//	println!("{:?}",ppc.inputs);
+			thread::sleep(Duration::from_millis(2));
 		}
+	});
 
-
-		thread::sleep(Duration::from_millis(2));
-	}
+	opponent_handle.join().unwrap();
+	player_handle.join().unwrap();
 }

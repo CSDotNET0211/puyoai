@@ -203,7 +203,7 @@ impl<E: Evaluator> AI<E> {
 			let mut new_board_sim = new_board.clone();
 			let mut ojama_clone = ojama.clone();
 			if ojama_clone.get_receivable_ojama_size() != 0 {
-				new_board_sim.try_put_ojama(&mut ojama_clone, rng);
+				new_board_sim.try_put_ojama(&mut ojama_clone/*, rng*/);
 			}
 
 			//	let mut waste_chain_link = 0;
