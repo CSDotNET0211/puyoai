@@ -1,6 +1,7 @@
 ﻿use std::arch::x86_64::*;
 use std::ops::{BitAnd, BitOr, BitXor};
 use std::sync::LazyLock;
+use crate::board::WIDTH_WITH_BORDER;
 use crate::split_board::SplitBoard;
 
 
@@ -157,9 +158,9 @@ impl BoardBit {
 	}
 	#[inline]
 	pub unsafe fn popcnt128(&self) -> i32 {
-		let low = _mm_cvtsi128_si64(self.0); 
-		let shifted = _mm_srli_si128::<8>(self.0); 
-		let high = _mm_cvtsi128_si64(shifted); 
+		let low = _mm_cvtsi128_si64(self.0);
+		let shifted = _mm_srli_si128::<8>(self.0);
+		let high = _mm_cvtsi128_si64(shifted);
 
 
 		_popcnt64(low) + _popcnt64(high)
@@ -222,11 +223,51 @@ impl BoardBit {
 		// ビットを立てる
 		unsafe { _mm_or_si128(x, mask_m128i) }
 	}
+
+	/*#[inline]
+	pub unsafe fn set_bit_true(board: &mut __m128i, x: u8, y: u8) {
+		let mut align: [i16; WIDTH_WITH_BORDER as usize] = Default::default();
+		align[0] = _mm_extract_epi16::<0>(*board) as i16;
+		align[1] = _mm_extract_epi16::<1>(*board) as i16;
+		align[2] = _mm_extract_epi16::<2>(*board) as i16;
+		align[3] = _mm_extract_epi16::<3>(*board) as i16;
+		align[4] = _mm_extract_epi16::<4>(*board) as i16;
+		align[5] = _mm_extract_epi16::<5>(*board) as i16;
+		align[6] = _mm_extract_epi16::<6>(*board) as i16;
+		align[7] = _mm_extract_epi16::<7>(*board) as i16;
+
+
+		_mm_set_epi16(
+			_mm_extract_epi16::<0>(*board) as i16,
+			_mm_extract_epi16::<0>(*board) as i16,
+			_mm_extract_epi16::<0>(*board) as i16,
+			_mm_extract_epi16::<0>(*board) as i16,
+			_mm_extract_epi16::<0>(*board) as i16,
+			_mm_extract_epi16::<0>(*board) as i16,
+			_mm_extract_epi16::<0>(*board) as i16,
+			_mm_extract_epi16::<0>(*board) as i16,
+		);
+
+		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
+		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, *board);
+		board_split_aligned.0[x as usize] = board_split_aligned.0[x as usize] | 1 << y;
+		*board = _mm_load_si128(board_split_aligned.0.as_ptr() as *const __m128i);
+	}*/
+
 	#[inline]
 	pub unsafe fn set_bit_true(board: &mut __m128i, x: u8, y: u8) {
 		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
 		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, *board);
 		board_split_aligned.0[x as usize] = board_split_aligned.0[x as usize] | 1 << y;
+		*board = _mm_load_si128(board_split_aligned.0.as_ptr() as *const __m128i);
+	}
+	
+	
+	#[inline]
+	pub unsafe fn set_bit_false(board: &mut __m128i, x: u8, y: u8) {
+		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
+		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, *board);
+		board_split_aligned.0[x as usize] = board_split_aligned.0[x as usize] & !(1 << y);
 		*board = _mm_load_si128(board_split_aligned.0.as_ptr() as *const __m128i);
 	}
 
@@ -235,13 +276,6 @@ impl BoardBit {
 		*board_column = *board_column | *mask;
 	}
 
-	#[inline]
-	pub unsafe fn set_bit_false(board: &mut __m128i, x: u8, y: u8) {
-		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, *board);
-		board_split_aligned.0[x as usize] = board_split_aligned.0[x as usize] & !(1 << y);
-		*board = _mm_load_si128(board_split_aligned.0.as_ptr() as *const __m128i);
-	}
 
 	#[inline]
 	pub unsafe fn set_bit_false_column(board_column: &mut u16, mask: &u16) {

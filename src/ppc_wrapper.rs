@@ -97,35 +97,37 @@ impl PpcWrapper {
 		let env = self.env.lock().as_mut().unwrap();
 		let ppc = self.ppc.lock().as_mut().unwrap();
 		let mut raw_board = *self.raw_board.lock().unwrap();
+		let mut left_puyos = self.left_puyos.lock().unwrap();
+		let mut puyo_mapping = self.puyo_mapping.lock().unwrap();
 
-		self.env.update();
+		env.update();
 
-		self.ppc.get_board(&mut raw_board);
-		Self::update_board(&mut raw_board, &mut env.board, &mut self.left_puyos, &mut self.puyo_mapping);
-		Self::update_next(ppc, &mut env.next, &mut self.left_puyos, &mut self.puyo_mapping);
+		ppc.get_board(&mut raw_board);
+		Self::update_board(&mut raw_board, &mut env.board, &mut left_puyos, &mut puyo_mapping);
+		Self::update_next(ppc, &mut env.next, &mut left_puyos, &mut puyo_mapping);
 
 		Self::update_current(ppc, &mut env.puyo_status, &mut env.center_puyo, &mut env.movable_puyo, &mut left_puyos, &mut puyo_mapping);
-		match self.ppc.get_is_movable() {
+		match ppc.get_is_movable() {
 			Ok(value) => {
-				self.is_movable = value;
+				*self.is_movable.lock().unwrap() = value;
 			}
 			Err(_) => {
-				self.is_movable = false;
+				*self.is_movable.lock().unwrap() = false;
 			}
 		}
 
 //		let think = Instant::now();
 
 		//連鎖検知
-		let new_current_chain = self.ppc.get_current_chain().unwrap();
+		let new_current_chain = ppc.get_current_chain().unwrap();
 		//	println!("{new_current_chain}");
-		if self.current_chain != new_current_chain
+		if *self.current_chain.lock().unwrap() != new_current_chain
 			&& new_current_chain == 1 {
 			//panic!();
 			println!("連鎖 detect:{}", self.player_index);
 			//連鎖開始
-			self.ppc.get_board_otf(&mut self.raw_board);
-			Self::update_board(&mut self.raw_board, &mut self.env.board, &mut self.left_puyos, &mut self.puyo_mapping);
+			ppc.get_board_otf(&mut raw_board);
+			Self::update_board(&mut raw_board, &mut env.board, &mut left_puyos, &mut puyo_mapping);
 			//OjamaStatus
 
 			//TODO: 全消し判定もここで
@@ -138,13 +140,13 @@ impl PpcWrapper {
 			let mut opponent = opponent.lock().unwrap();
 			println!("連鎖開始しちゃうよん");
 			loop {
-				let score = self.env.board.erase_if_needed(&chain, &mut board_mask, &mut 0);
+				let score = env.board.erase_if_needed(&chain, &mut board_mask, &mut 0);
 				if score == 0 {
 					break;
 				}
 
 				elapsed_frame += FrameNeeded::VANISH_PUYO_ANIMATION;
-				let drop_count = self.env.board.drop_after_erased(&board_mask);
+				let drop_count = env.board.drop_after_erased(&board_mask);
 				if drop_count > 0 {
 					elapsed_frame += FrameNeeded::TEAR_PUYO_DROP_PER_1_BLOCK * drop_count as usize;
 					elapsed_frame += FrameNeeded::LAND_PUYO_ANIMATION;
@@ -154,18 +156,18 @@ impl PpcWrapper {
 				chain += 1;
 			}
 
-			let ojama_rate = opponent.env.ojama_rate;
+			let ojama_rate = env.ojama_rate;
 			dbg!((chain_score / ojama_rate));
 			if chain_score == 40 {
 				chain_score = 70;
 			}
 			dbg!(elapsed_frame);
-			opponent.env.ojama.push(chain_score / ojama_rate, elapsed_frame);
+			env.ojama.push(chain_score / ojama_rate, elapsed_frame);
 		}
 
-		self.current_chain = new_current_chain;
+		*self.current_chain.lock().unwrap() = new_current_chain;
 
-		if self.controller.is_some() {
+		if self.controller.lock().unwrap().is_some() {
 			self.try_control();
 		}
 	}
@@ -237,8 +239,8 @@ impl PpcWrapper {
 	}
 
 	fn update_game_state(&mut self) {
-		let new_state = self.ppc.get_state();
-		if new_state != self.current_state {
+		let new_state = self.ppc.lock().unwrap().get_state();
+		if new_state != *self.current_state.lock().unwrap() {
 			dbg!(new_state);
 			match new_state {
 				GameState::Idle => {}
@@ -248,7 +250,7 @@ impl PpcWrapper {
 				GameState::Run => {}
 				GameState::End => {}
 			}
-			self.current_state = new_state;
+			*self.current_state.lock().unwrap() = new_state;
 		}
 
 
@@ -257,21 +259,21 @@ impl PpcWrapper {
 
 
 	fn try_control(&mut self) {
-		if self.inputs.len() == 0 /* || self.origin_pos.is_none()*/ {
+		if self.inputs.lock().unwrap().len() == 0 /* || self.origin_pos.is_none()*/ {
 			return;
 		}
 
-		let new_pos = self.env.puyo_status.clone();
-		if self.origin_pos.is_none() {
-			if !self.is_movable {
+		let new_pos = self.env.lock().unwrap().puyo_status.clone();
+		if self.origin_pos.lock().unwrap().is_none() {
+			if !*self.is_movable.lock().unwrap() {
 				return;
 			}
 
-			self.origin_pos = Some(new_pos.clone());
+			*self.origin_pos.lock().unwrap() = Some(new_pos.clone());
 			//	dbg!(&new_pos);
 		}
 		//inputs[0]のやつをxboxの入力に直す
-		let xbox_button = match self.inputs[0] {
+		let xbox_button = match self.inputs.lock().unwrap()[0] {
 			KeyType::Right => { XButtons::RIGHT }
 			KeyType::Left => { XButtons::LEFT }
 			KeyType::Drop => { XButtons::DOWN }
@@ -284,14 +286,14 @@ impl PpcWrapper {
 
 		match xbox_button {
 			XButtons::RIGHT | XButtons::LEFT | XButtons::A | XButtons::B => {
-				if self.pressing {
+				if *self.pressing.lock().unwrap() {
 					//	println!("離した！");
 					self.controller.as_mut().unwrap().release_all();
 				} else {
 					//	println!("押した！");
 					self.controller.as_mut().unwrap().press(XButtons::from(xbox_button));
 				}
-				self.pressing = !self.pressing;
+				*self.pressing.lock().unwrap() = !*self.pressing.lock().unwrap();
 			}
 			XButtons::X => {
 				if self.pressing {

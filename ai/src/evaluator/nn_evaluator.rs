@@ -1,12 +1,13 @@
 ﻿use std::arch::x86_64::{_mm_and_si128, _mm_andnot_si128, _mm_extract_epi64, _mm_or_si128, _mm_set_epi64x, _mm_slli_epi16, _mm_slli_si128, _mm_srli_epi16, _mm_srli_si128, _popcnt64};
 
-use revonet::neuro::NeuralNetwork;
+use revonet::neuro::{MultilayeredNetwork, NeuralNetwork};
 
 use env::board::Board;
 use env::board_bit::BoardBit;
 use env::env::DEAD_POSITION;
 use env::ojama_status::OjamaStatus;
 use env::puyo_kind::{COLOR_PUYOS, PuyoKind};
+use crate::build_ai::AI;
 
 use crate::debug::Debug;
 use crate::evaluator::Evaluator;
@@ -29,33 +30,34 @@ pub struct NNEvaluator<T: NeuralNetwork> {
 
 impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 	fn evaluate(&mut self,
-				board: &Board,
+				put_board: &Board,
 				sim_board: &Board,
+				potential: &Potential,
 				chain: &u8,
 				score: &usize,
 				elapse_frame: &u32,
 				debug: &mut Debug,
 				ojama: &OjamaStatus,
 				ojama_rate: &usize,
-				best_potential: &Potential,
 				opponent_status: &OpponentStatus,
 				waste_chain_link: &usize,
-				one_side_chain_count: &u8) -> f32 {
+				one_side_chain_count: &u8,
+				instant_attack_count: &u8,
+	) -> f32 {
 		unsafe {
 			if !sim_board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
-				debug.dead = true;
 				return f32::MIN;
 			}
 
-			let mut nn_added_count = best_potential.added_count;
+			//TODO: 操作中に志向ができるようになったらこっちで毎回計算
+			debug.instant_attack_count = *instant_attack_count as usize;
 
-			for puyo_type in COLOR_PUYOS {
-				let same_count = BoardBit(_mm_and_si128(best_potential.diff_board.get_bits(puyo_type).0, board.get_bits(puyo_type).0)).popcnt128() as u8;
-				nn_added_count -= same_count;
-			}
+			let mut nn_added_count = potential.added_count;
 
-			assert!(nn_added_count >= 0);
-
+			/*	for puyo_type in COLOR_PUYOS {
+					let same_count = BoardBit(_mm_and_si128(potential.diff_board.get_bits(puyo_type).0, put_board.get_bits(puyo_type).0)).popcnt128() as u8;
+					nn_added_count -= same_count;
+				}*/
 
 			let nn_ojama_count_in_board = sim_board.get_bits(PuyoKind::Ojama).popcnt128();
 			let height = sim_board.get_heights();
@@ -83,9 +85,6 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 			}
 
 
-			debug.link2_count = nn_link2;
-			debug.link3_count = nn_link3;
-
 			let mut nn_highest_template_score = 0;
 
 			for template in &self.templates {
@@ -105,36 +104,37 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 			let nn_ojama_size = unsafe { ojama.get_all_ojama_size() };
 //12 + 2 + 1 + 3 + 2 = 20
 			let result = self.neuralnetwork.compute(&[
-				nn_link2 as f32,
-				nn_link3 as f32,
-				*chain as f32,
-				*score as f32,
-				*elapse_frame as f32,
-				nn_bump as f32,
-				nn_height_sum as f32,
-				nn_highest_template_score as f32,
-				nn_ojama_size as f32,
-				ojama.get_time_to_receive() as f32,
-				(nn_ojama_size as isize - (*score / *ojama_rate) as isize) as f32,
-				nn_ojama_count_in_board as f32,
-				nn_added_count as f32,
-				best_potential.chain as f32,
-				opponent_status.board_height as f32,
-				opponent_status.board_ojama_count as f32,
-				opponent_status.instant_attack as f32,
-				opponent_status.potential_added_count as f32,
-				opponent_status.potential_chain_count as f32,
+				nn_link2 as f32,//2連結数
+				nn_link3 as f32,//3連結数
+				*chain as f32,//連鎖数
+				*score as f32,//連鎖スコア
+				*elapse_frame as f32,//連鎖経過時間
+				nn_bump as f32,//盤面のでこぼこ
+				//	nn_height_sum as f32,//盤面の高さ合計
+				nn_highest_template_score as f32,//土台
+				nn_ojama_size as f32,//相手からもらってるお邪魔の合計
+				ojama.get_time_to_receive() as f32,//お邪魔を受けるまでの時間
+				(nn_ojama_size as isize - (*score / *ojama_rate) as isize) as f32,//自分の火力で相殺できるか
+				nn_ojama_count_in_board as f32,//盤面上のお邪魔数
+				nn_added_count as f32,//ポテンシャル連鎖の追加数
+				potential.chain as f32,//ポテンシャル連鎖の連鎖数
+				opponent_status.board_height as f32,//相手の盤面の高さ合計
+				opponent_status.board_ojama_count as f32,//相手の盤面のお邪魔合計
+				opponent_status.instant_attack as f32,//相手の盤面の一定時間内の2列以上の火力
+				opponent_status.potential_added_count as f32,//相手の盤面のポテンシャル連鎖の発火カウント
+				opponent_status.potential_chain_count as f32,//相手の盤面のポテンシャル連鎖の連鎖数
 				height[1] as f32,
 				height[2] as f32,
 				height[3] as f32,
 				height[4] as f32,
 				height[5] as f32,
 				height[6] as f32,
-				*waste_chain_link as f32,
-				*one_side_chain_count as f32,
-				best_potential.empty_around_count as f32,
-				best_potential.added_pos.x as f32,
-				best_potential.added_pos.y as f32
+				*waste_chain_link as f32,//発火した際、理論値の連鎖数*4からどれだけ離れていた（連結が多かったか）
+				*one_side_chain_count as f32,//左右どちらか3列のみで連鎖した数
+				potential.near_empty_count as f32,//発火点周辺の空白マス数
+				potential.ignite_pos.x as f32,//発火点のx座標
+				potential.ignite_pos.y as f32,//発火点のy座標
+				*instant_attack_count as f32
 			]);
 
 			result[0]

@@ -22,15 +22,18 @@ impl OpponentStatus {
 		}
 
 		opponent_status.board_ojama_count = board.get_bits(PuyoKind::Ojama).popcnt128() as usize;
-		//TODO: instant_attack
-		let result = AI::<NNEvaluator<MultilayeredNetwork>>::get_potential_chain_all(board);
-		opponent_status.potential_added_count = result.added_count as usize;
-		opponent_status.potential_chain_count = result.chain as usize;
+		let result_potential = AI::<NNEvaluator<MultilayeredNetwork>>::get_potential_chain_all(board);
+		let result_instant_attack_count = AI::<NNEvaluator<MultilayeredNetwork>>::get_instant_attack(board,&70);
+
+
+		opponent_status.potential_added_count = result_potential.added_count as usize;
+		opponent_status.potential_chain_count = result_potential.chain as usize;
+		opponent_status.instant_attack = result_instant_attack_count as usize;
 
 		opponent_status
 	}
-	
-	pub fn clone(&self)->Self{
+
+	pub fn clone(&self) -> Self {
 		Self {
 			board_height: self.board_height,
 			instant_attack: self.instant_attack,

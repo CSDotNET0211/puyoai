@@ -2,25 +2,33 @@
 use std::fs::File;
 use std::io::Error;
 use std::io::Write;
+use env::vector2::Vector2;
 use crate::path::Path;
+use crate::potential::Potential;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, )]
 pub struct Debug {
-	pub link2_count: u32,
-	pub link3_count: u32,
-	pub ignite_count: u32,
-	pub attack: usize,
-	pub dead: bool,
+	pub link2_count: usize,
+	pub link3_count: usize,
+	pub near_empty_count: usize,
+	pub ignite_pos: Vector2,
+	pub waste_chain_link: usize,
+	pub one_side_chain_count: usize,
+	pub potential_added_count: usize,
+	pub instant_attack_count:usize
 }
 
 impl Debug {
-	pub fn new() -> Debug {
+	pub unsafe fn new() -> Debug {
 		Debug {
 			link2_count: 0,
 			link3_count: 0,
-			ignite_count: 0,
-			attack: 0,
-			dead: false,
+			ignite_pos: Vector2::default(),
+			near_empty_count: 0,
+			potential_added_count: 0,
+			waste_chain_link: 0,
+			one_side_chain_count: 0,
+			instant_attack_count:0
 		}
 	}
 

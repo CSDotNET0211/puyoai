@@ -1,9 +1,11 @@
-﻿use std::arch::x86_64::{__m128i, _mm_and_si128, _mm_andnot_si128, _mm_cvtsi128_si64, _mm_extract_epi64, _mm_set_epi64x, _mm_setzero_si128, _mm_store_si128, _mm_xor_si128, _popcnt64};
+﻿use std::arch::x86_64::{__m128i, _mm_and_si128, _mm_andnot_si128, _mm_cvtsi128_si64, _mm_extract_epi16, _mm_extract_epi64, _mm_set_epi64x, _mm_setzero_si128, _mm_store_si128, _mm_xor_si128, _popcnt64};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use rand::rngs::ThreadRng;
 use rand::thread_rng;
+use revonet::neuro::MultilayeredNetwork;
+use serde::__private::de::Content::U8;
 
 use env::board::Board;
 use env::board_bit::BoardBit;
@@ -24,6 +26,8 @@ use crate::key_type::KeyType::{Drop, Left, Right, Rotate180, RotateLeft, RotateR
 use crate::opponent_status::OpponentStatus;
 use crate::path::Path;
 use crate::potential::Potential;
+
+pub const POTENTIAL_SEARCH_DEPTH: usize = 4;
 
 //盤面とネクスト、カレントを渡す
 //凝視情報？相手のそのまま？
@@ -49,7 +53,7 @@ impl<E: Evaluator> AI<E> {
 			best_move: self.best_move.clone(),
 			eval: self.eval,
 			evaluator: self.evaluator.clone(),
-			debug: self.debug.clone(),
+			debug: Option::from(self.debug.clone()),
 		}
 	}
 
@@ -59,33 +63,26 @@ impl<E: Evaluator> AI<E> {
 		//self.best_move = None;
 		self.debug = None;
 
-		/*if ojama.0!=0{
-			panic!("test");
-		}*/
-		/*
-		if !board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
-			return;;
-		}*/
-
-		//	let mut potential = Self::get_potential_chain_all(&board);
-		let mut potential = Potential::default();
-		let mask = board.get_not_empty_board();
-		let mut diff_board = Board::default();
-		diff_board.0[0] = _mm_andnot_si128(mask.0, potential.diff_board.0[0]);
-		diff_board.0[1] = _mm_andnot_si128(mask.0, potential.diff_board.0[1]);
-		diff_board.0[2] = _mm_andnot_si128(mask.0, potential.diff_board.0[2]);
-		potential.diff_board = diff_board;
-
-		//potential.board,
 		let mut rng = thread_rng();
 
-		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate, &mut rng, &potential, opponent_status, 0);
+		let instant_attack_count = AI::<NNEvaluator<MultilayeredNetwork>>::get_instant_attack(&board,&ojama_rate);
+
+
+		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate, &mut rng, opponent_status, 0,&instant_attack_count);
+
 
 		if let Some(pos) = self.best_move.as_mut().unwrap().path.iter().position(|&x| x == Drop) {
 			let mut new = self.best_move.clone().unwrap().path;
 			new.truncate(pos + 1);
 			self.best_move.as_mut().unwrap().path = new;
 		}
+
+
+		//	let mut debug = Debug::new();
+		/*		debug.pos = potential.added_pos;
+				debug.added = potential.added_count as usize;
+				debug.empty = potential.empty_around_count as usize;*/
+		//self.debug = Option::from(debug);
 	}
 
 	///1,2つの同色ぷよを全68パターン仮想落下し、潜在的連鎖情報を取得
@@ -100,33 +97,17 @@ impl<E: Evaluator> AI<E> {
 
 			Self::simulate(put_board, &mut chain, &mut cleared_pos_flag);
 
-			//置く前と置いた後の差分で置いた場所を取得
-			let diff_board = _mm_xor_si128(board.get_not_empty_board().0, put_board.get_not_empty_board().0);
-			//置いた場所を一回り拡張
-			let neighbor_mask = BoardBit(diff_board).expand_1_without_mask();
-			//置いた後のboardとand演算して置いてある場所を列挙
-			let neighbor_flag = _mm_and_si128(neighbor_mask.0, put_board.get_not_empty_board().0);
-			let empty_count = neighbor_mask.popcnt128() - BoardBit(neighbor_flag).popcnt128();
 
-
-			Self::get_potential_chain(&put_board, &heights, &0, &cleared_pos_flag, 1 + *added_count, &mut potential);
-			if best_potential.chain > potential.chain {
-				best_potential.chain = potential.chain;
-				best_potential.added_count = potential.added_count;
-				best_potential.diff_board = put_board.clone();
-				best_potential.empty_around_count = empty_count as u8;
-				best_potential.added_pos = ignite_pos;
+			Self::get_potential_chain(&put_board, &heights, &chain, &cleared_pos_flag, 1 + *added_count, &mut potential, 0);
+			if best_potential.chain < potential.chain {
+				best_potential = Potential::new(potential.chain, potential.added_count, put_board.clone(), u8::MAX, ignite_pos);
 				best_potential_count = 1;
 			} else if best_potential.chain == potential.chain {
 				if best_potential.added_count < potential.added_count {
-					best_potential.chain = potential.chain;
-					best_potential.added_count = potential.added_count;
-					best_potential.diff_board = put_board.clone();
-					best_potential.empty_around_count = empty_count as u8;
-					best_potential.added_pos = ignite_pos;
+					best_potential = Potential::new(potential.chain, potential.added_count, put_board.clone(), u8::MAX, ignite_pos);
 					best_potential_count = 1;
 				} else if best_potential.added_count == potential.added_count {
-					best_potential.added_count += 1;
+					best_potential_count += 1;
 				}
 			}
 		};
@@ -173,6 +154,68 @@ impl<E: Evaluator> AI<E> {
 
 		best_potential
 	}
+	#[inline]
+	///仮想落下で、
+	pub unsafe fn get_instant_attack(board: &Board,ojama_rate:&usize) -> u8 {
+		let mut instant_attack_count = 0;
+
+		let mut eval = |board: &Board| {
+			let mut chain = 0;
+			let mut score = 0usize;
+			let mut elapsed_frame = 0usize;
+
+			chain = 0;
+			let mut test_board = board.clone();
+
+			loop {
+				let mut erase_mask = BoardBit::default();
+
+				let temp_score = test_board.erase_if_needed(&chain, &mut erase_mask, &mut 0);
+				if temp_score == 0 {
+					break;
+				}
+
+				elapsed_frame += FrameNeeded::VANISH_PUYO_ANIMATION;
+				let drop_count = test_board.drop_after_erased(&erase_mask);
+				if drop_count > 0 {
+					elapsed_frame += drop_count as usize * FrameNeeded::TEAR_PUYO_DROP_PER_1_BLOCK;
+					elapsed_frame += FrameNeeded::LAND_PUYO_ANIMATION;
+				}
+
+				chain += 1;
+				score += temp_score as usize;
+			}
+
+			if elapsed_frame <= 210 && (score / ojama_rate) >= 12 {
+				instant_attack_count += 1;
+			}
+		};
+
+
+		//ぷよの種類
+		for puyo_type in COLOR_PUYOS {
+			//縦
+			'put: for x in 1..=6u8 {
+				//落下するぷよの数
+				//	for puyo_count in 1..=2 {
+				let mut board_clone = board.clone();
+				let mut heights = board.get_heights();
+
+				for _ in 0..2 {
+					if heights[x as usize] > 12 {
+						continue 'put;
+					}
+					board_clone.put_puyo_direct(&x, &mut heights, &puyo_type);
+				}
+
+
+				eval(board);
+				//	}
+			}
+		}
+
+		instant_attack_count
+	}
 
 	unsafe fn search_internal(&mut self,
 							  board: &Board,
@@ -187,9 +230,9 @@ impl<E: Evaluator> AI<E> {
 							  mut all_cleared: bool,
 							  ojama_rate: &usize,
 							  rng: &mut ThreadRng,
-							  best_potential: &Potential,
 							  opponent_status: &OpponentStatus,
 							  mut waste_chain_link: usize,
+							  instant_attack_count:&u8
 	) {
 		let mut places: HashMap<u16, (u8, PuyoStatus)> = HashMap::new();
 		let mut hash_position = HashMap::new();
@@ -197,13 +240,14 @@ impl<E: Evaluator> AI<E> {
 
 		for place in places {
 			///操作ミノを適用しただけの盤面
-			let mut new_board = board.clone();
-			new_board.put_puyo(&place.1.1, &center_puyo, &movable_puyo);
+			let mut put_board = board.clone();
+			let mut put_place = Vector2::default();
+			put_board.put_puyo(&place.1.1, &center_puyo, &movable_puyo, &mut put_place);
 			///連鎖、落下のシミュレーションを実行した盤面
-			let mut new_board_sim = new_board.clone();
+			let mut sim_board = put_board.clone();
 			let mut ojama_clone = ojama.clone();
 			if ojama_clone.get_receivable_ojama_size() != 0 {
-				new_board_sim.try_put_ojama(&mut ojama_clone/*, rng*/);
+				sim_board.try_put_ojama(&mut ojama_clone);
 			}
 
 			//	let mut waste_chain_link = 0;
@@ -211,10 +255,11 @@ impl<E: Evaluator> AI<E> {
 			let mut new_score = score;
 			let mut chain = 0u8;
 			let mut chain_one_side = 0u8;
+			let mut cleared_pos_flag = 0;
 
 			let mut erase_mask = BoardBit::default();
 			loop {
-				let temp_score = new_board_sim.erase_if_needed(&chain, &mut erase_mask, &mut waste_chain_link);
+				let temp_score = sim_board.erase_if_needed(&chain, &mut erase_mask, &mut waste_chain_link);
 				if temp_score == 0 {
 					break;
 				}
@@ -229,25 +274,43 @@ impl<E: Evaluator> AI<E> {
 				}
 
 				elapsed_frame += FrameNeeded::VANISH_PUYO_ANIMATION;
-				let drop_count = new_board_sim.drop_after_erased(&erase_mask);
+				let drop_count = sim_board.drop_after_erased(&erase_mask);
 				if drop_count > 0 {
 					elapsed_frame += drop_count as usize * FrameNeeded::TEAR_PUYO_DROP_PER_1_BLOCK;
 					elapsed_frame += FrameNeeded::LAND_PUYO_ANIMATION;
 				}
 
+				let mut new_x_pos_flag = 0u8;
+
+				let value = _mm_extract_epi16::<1>(erase_mask.0);
+				new_x_pos_flag |= (!(value == 0) as u8) << 1;
+				let value = _mm_extract_epi16::<2>(erase_mask.0);
+				new_x_pos_flag |= (!(value == 0) as u8) << 2;
+				let value = _mm_extract_epi16::<3>(erase_mask.0);
+				new_x_pos_flag |= (!(value == 0) as u8) << 3;
+				let value = _mm_extract_epi16::<4>(erase_mask.0);
+				new_x_pos_flag |= (!(value == 0) as u8) << 4;
+				let value = _mm_extract_epi16::<5>(erase_mask.0);
+				new_x_pos_flag |= (!(value == 0) as u8) << 5;
+				let value = _mm_extract_epi16::<6>(erase_mask.0);
+				new_x_pos_flag |= (!(value == 0) as u8) << 6;
+
+				if new_x_pos_flag != 0 {
+					cleared_pos_flag = new_x_pos_flag;
+				}
 
 				chain += 1;
 				new_score += temp_score as usize;
 			}
 
-			if !new_board_sim.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
+			if !sim_board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				continue;
 			}
 
-			if new_board_sim.is_same(&_mm_setzero_si128(),
-									 &_mm_set_epi64x(0b1111111111111111000000000000000100000000000000010000000000000001u64 as i64,
-													 0b0000000000000001000000000000000100000000000000011111111111111111u64 as i64),
-									 &_mm_setzero_si128()) {
+			if sim_board.is_same(&_mm_setzero_si128(),
+								 &_mm_set_epi64x(0b1111111111111111000000000000000100000000000000010000000000000001u64 as i64,
+												 0b0000000000000001000000000000000100000000000000011111111111111111u64 as i64),
+								 &_mm_setzero_si128()) {
 				all_cleared = true;
 			}
 
@@ -276,10 +339,38 @@ impl<E: Evaluator> AI<E> {
 				let new_movable_puyo = new_next.pop().unwrap();
 
 
-				self.search_internal(&new_board_sim, &new_current, &new_next, &ojama_clone, new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate, rng, best_potential, opponent_status, waste_chain_link);
+				self.search_internal(&sim_board, &new_current, &new_next, &ojama_clone, new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate, rng, opponent_status, waste_chain_link,instant_attack_count);
 			} else {
+				let mut potential = Potential::default();
+				AI::<NNEvaluator<MultilayeredNetwork>>::get_potential_chain(&put_board, &put_board.get_heights(), &chain, &cleared_pos_flag, 0, &mut potential, 0);
+
+				/*	let mask = board.get_not_empty_board();
+					let mut diff_board = Board::default();
+					diff_board.0[0] = _mm_andnot_si128(mask.0, potential.diff_board.0[0]);
+					diff_board.0[1] = _mm_andnot_si128(mask.0, potential.diff_board.0[1]);
+					diff_board.0[2] = _mm_andnot_si128(mask.0, potential.diff_board.0[2]);
+					potential.diff_board = diff_board;*/
+
+				potential.ignite_pos = put_place;
+
+				//置く前と置いた後の差分で置いた場所を取得
+				let diff_board = _mm_xor_si128(board.get_not_empty_board().0, put_board.get_not_empty_board().0);
+				//置いた場所を一回り拡張
+				let neighbor_mask = BoardBit(diff_board).expand_1_without_mask();
+				//置いた後のboardとand演算して置いてある場所を列挙
+				let neighbor_flag = _mm_and_si128(neighbor_mask.0, put_board.get_not_empty_board().0);
+				let empty_count = neighbor_mask.popcnt128() - BoardBit(neighbor_flag).popcnt128();
+				potential.near_empty_count = empty_count as u8;
+
+
 				let mut debug = Debug::new();
-				let eval = self.evaluator.evaluate(&new_board, &new_board_sim, &chain, &new_score, &0, &mut debug, &ojama_clone, ojama_rate, best_potential, opponent_status, &waste_chain_link, &chain_one_side);
+				debug.near_empty_count = potential.near_empty_count as usize;
+				debug.ignite_pos = potential.ignite_pos;
+				debug.waste_chain_link = waste_chain_link;
+				debug.one_side_chain_count = chain_one_side as usize;
+				debug.potential_added_count = potential.added_count as usize;
+
+				let eval = self.evaluator.evaluate(&put_board, &sim_board, &potential, &chain, &new_score, &(elapsed_frame as u32), &mut debug, &ojama_clone, ojama_rate, opponent_status, &waste_chain_link, &chain_one_side,instant_attack_count);
 
 				//highest_evalよりも評価が高かったら、計算したpath、
 				if self.best_move == None || self.best_move.as_ref().unwrap().eval < eval {
@@ -557,9 +648,17 @@ impl<E: Evaluator> AI<E> {
 		}
 	}
 
-
+	///現在の連鎖フラグの箇所にぷよをドロップして連鎖が伸びるかを見る
 	#[inline]
-	unsafe fn get_potential_chain(board: &Board, heights: &[u16; 8], current_chain: &u8, cleared_pos_flag: &u8, added_count: u8, best_potential: &mut Potential) {
+	pub unsafe fn get_potential_chain(board: &Board, heights: &[u16; 8], current_chain: &u8, cleared_pos_flag: &u8, added_count: u8, best_potential: &mut Potential, current_depth: usize) {
+		/*if current_depth > POTENTIAL_SEARCH_DEPTH {
+			return;
+		}*/
+
+		if added_count > 5 {
+			return;
+		}
+
 		//最後の連鎖のx情報を使って連鎖を実行、cleared_pos_flagが0なら
 		//連鎖数を見てチェック
 
@@ -586,31 +685,25 @@ impl<E: Evaluator> AI<E> {
 					let mut test_chain = 0;
 					let mut test_cleared_pos_flag = 0;
 
-					//	let a = test_board.to_str();
-					/*	dbg!(x);
-						dbg!(test_heights[x as usize]);
-						dbg!(puyo);
-						dbg!(a);*/
-
 					Self::simulate(&test_board, &mut test_chain, &mut test_cleared_pos_flag);
 
 
 					//連鎖が伸びた場合
 					if *current_chain < test_chain {
-						Self::get_potential_chain(&test_board, &test_heights, &test_chain, &test_cleared_pos_flag, added_count + 1, best_potential);
+						Self::get_potential_chain(&test_board, &test_heights, &test_chain, &test_cleared_pos_flag, added_count + 1, best_potential, current_depth + 1);
+
+						//最高連鎖
+						if best_potential.chain < test_chain {
+							*best_potential = Potential {
+								chain: test_chain,
+								added_count: added_count,
+								//		diff_board: test_board,
+								near_empty_count: 0,
+								ignite_pos: Vector2::default(),
+							};
+						}
 					} else {
 						continue 'puyo;
-					}
-
-					//最高連鎖
-					if best_potential.chain < test_chain {
-						*best_potential = Potential {
-							chain: test_chain,
-							added_count: added_count,
-							diff_board: test_board,
-							empty_around_count: 0,
-							added_pos: Vector2::default(),
-						};
 					}
 				}
 			}
@@ -619,26 +712,39 @@ impl<E: Evaluator> AI<E> {
 
 	///連鎖のシミュレートを実行、最後のx情報と連鎖数を取得
 	#[inline]
-	unsafe fn simulate(board: &Board, chain: &mut u8, x_pos_flag: &mut u8) {
+	pub unsafe fn simulate(board: &Board, chain: &mut u8, x_pos_flag: &mut u8) {
 		*chain = 0;
 		let mut test_board = board.clone();
 
 		loop {
 			let mut erase_mask = BoardBit::default();
 
+
 			let temp_score = test_board.erase_if_needed(&chain, &mut erase_mask, &mut 0);
 			if temp_score == 0 {
 				break;
 			}
+			let mut new_x_pos_flag = 0u8;
 
-
-			*x_pos_flag = 0u8;
+			//*x_pos_flag = 0u8;
 			//マスクの情報を使って消えるラインを特定
-			let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
-			_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, erase_mask.0);
 
-			for i in 1..=6 {
-				*x_pos_flag |= (!(board_split_aligned.0[i] == 0) as u8) << i;
+			let value = _mm_extract_epi16::<1>(erase_mask.0);
+			new_x_pos_flag |= (!(value == 0) as u8) << 1;
+			let value = _mm_extract_epi16::<2>(erase_mask.0);
+			new_x_pos_flag |= (!(value == 0) as u8) << 2;
+			let value = _mm_extract_epi16::<3>(erase_mask.0);
+			new_x_pos_flag |= (!(value == 0) as u8) << 3;
+			let value = _mm_extract_epi16::<4>(erase_mask.0);
+			new_x_pos_flag |= (!(value == 0) as u8) << 4;
+			let value = _mm_extract_epi16::<5>(erase_mask.0);
+			new_x_pos_flag |= (!(value == 0) as u8) << 5;
+			let value = _mm_extract_epi16::<6>(erase_mask.0);
+			new_x_pos_flag |= (!(value == 0) as u8) << 6;
+
+
+			if new_x_pos_flag != 0 {
+				*x_pos_flag = new_x_pos_flag;
 			}
 
 			test_board.drop_after_erased(&erase_mask);
@@ -666,7 +772,7 @@ mod tests {
 		 WEEEYYYW\
 		 WEEEBGGW\
 		 WEEEBBGW\
-		 WEEEEEEW\
+		 WEEEBEEW\
 		 WEEEEEEW\
 		 WEEEEEEW\
 		 WEEEEEEW\
@@ -681,7 +787,7 @@ mod tests {
 			let board = Board::from_str(&board);
 
 			let mut erase_mask = BoardBit::default();
-			let temp_score = board.erase_if_needed(&0, &mut erase_mask);
+			let temp_score = board.erase_if_needed(&0, &mut erase_mask, &mut 0);
 
 			if temp_score == 0 { //panic!();
 			}
@@ -689,16 +795,18 @@ mod tests {
 			let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
 			_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, erase_mask.0);
 
+
 			let mut cleared_pos_flag = 0u8;
 			for i in 1..7 {
 				cleared_pos_flag |= (!(board_split_aligned.0[i] == 0) as u8) << i;
 			}
 
+
 			let mut chain = 0;
 			let mut board_clone = board.clone();
 			let mut erase_mask = BoardBit::default();
 			loop {
-				let temp_score = board_clone.erase_if_needed(&chain, &mut erase_mask);
+				let temp_score = board_clone.erase_if_needed(&chain, &mut erase_mask, &mut 0);
 				if temp_score == 0 {
 					break;
 				}
@@ -710,10 +818,11 @@ mod tests {
 
 
 			let heights = board.get_heights();
-			let mut potensial = (0, 0);
+			let mut potential = Potential::default();
 
-			NNEvaluator::<MultilayeredNetwork>::get_potential_chain(&board, &heights, &chain, &cleared_pos_flag, 1, &mut potensial);
-			dbg!(potensial);
+			AI::<NNEvaluator<MultilayeredNetwork>>::get_potential_chain(&board, &heights, &chain, &cleared_pos_flag, 1, &mut potential, 0);
+			dbg!(potential.diff_board.to_str());
+			dbg!(potential);
 		}
 	}
 }

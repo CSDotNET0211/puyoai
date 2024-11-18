@@ -391,7 +391,7 @@ impl Env {
 
 	#[inline]
 	pub unsafe fn quick_drop(&mut self, opponent: Option<&mut Env>) {
-		let drop_count = self.board.put_puyo(&self.puyo_status, &self.center_puyo, &self.movable_puyo);
+		let drop_count = self.board.put_puyo(&self.puyo_status, &self.center_puyo, &self.movable_puyo, &mut Vector2::default());
 
 		self.center_puyo = PuyoKind::Empty;
 		self.movable_puyo = PuyoKind::Empty;

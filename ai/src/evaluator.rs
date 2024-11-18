@@ -14,17 +14,19 @@ use crate::potential::Potential;
 
 pub trait Evaluator {
 	fn evaluate(&mut self,
-				board: &Board,
+				put_board: &Board,
 				sim_board: &Board,
+				potential: &Potential,
 				chain: &u8,
 				score: &usize,
 				elapse_frame: &u32,
 				debug: &mut Debug,
 				ojama: &OjamaStatus,
 				ojama_rate: &usize,
-				best_potential: &Potential,
 				opponent_status: &OpponentStatus,
 				waste_chain_link: &usize,
-				one_side_chain_count: &u8) -> f32;
+				one_side_chain_count: &u8,
+				instant_attack_count: &u8,
+	) -> f32;
 	fn clone(&self) -> Self;
 }

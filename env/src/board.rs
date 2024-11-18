@@ -1,4 +1,4 @@
-﻿use std::arch::x86_64::{__m128i, _mm_and_si128, _mm_andnot_si128, _mm_cmpeq_epi32, _mm_cmpeq_epi64, _mm_load_si128, _mm_or_si128, _mm_set_epi64x, _mm_setzero_si128, _mm_store_si128, _mm_test_all_ones, _pext_u32, _popcnt32};
+﻿use std::arch::x86_64::{__m128i, _mm_and_si128, _mm_andnot_si128, _mm_cmpeq_epi32, _mm_cmpeq_epi64, _mm_extract_epi16, _mm_insert_epi16, _mm_load_si128, _mm_or_si128, _mm_set_epi16, _mm_set_epi64x, _mm_setr_epi16, _mm_setzero_si128, _mm_store_si128, _mm_test_all_ones, _pext_u32, _popcnt32};
 use std::mem;
 use rand::prelude::SliceRandom;
 use rand::rngs::ThreadRng;
@@ -10,6 +10,7 @@ use crate::ojama_status::OjamaStatus;
 use crate::puyo_kind::{COLOR_PUYOS, PuyoKind};
 use crate::puyo_status::PuyoStatus;
 use crate::split_board::SplitBoard;
+use crate::vector2::Vector2;
 
 pub const WIDTH: u8 = 6;
 pub const WIDTH_WITH_BORDER: u8 = 8;
@@ -17,6 +18,7 @@ pub const WIDTH_WITH_BORDER: u8 = 8;
 pub const HEIGHT: u8 = 14;
 pub const HEIGHT_WITH_BORDER: u8 = 16;
 
+#[derive(Debug, Clone)]
 pub struct Board(pub [__m128i; 3]);
 
 
@@ -37,20 +39,26 @@ impl Board {
 	#[inline]
 	pub fn clone(&self) -> Self {
 		unsafe {
-			let mut new_data = [mem::zeroed(); 3];
-			for i in 0..3 {
-				new_data[i] = _mm_load_si128(&self.0[i] as *const __m128i);
-			}
+			let new_data = [self.0[0], self.0[1], self.0[2]];
 			Board(new_data)
 		}
 	}
+
+	#[inline]
+	pub unsafe fn put_puyo_with_heights(&mut self, puyo_status: &PuyoStatus, center: &PuyoKind, movable: &PuyoKind) -> u8 {
+		panic!()
+	}
+
 	///落ちた量
 	#[inline]
-	pub unsafe fn put_puyo(&mut self, puyo_status: &PuyoStatus, center: &PuyoKind, movable: &PuyoKind) -> u8 {
+	pub unsafe fn put_puyo(&mut self, puyo_status: &PuyoStatus, center: &PuyoKind, movable: &PuyoKind, put_pos: &mut Vector2) -> u8 {
 		let mut drop_count: u8;
 
 		//この方法の場合、14段目上書きになるけど、移動できないから問題ない
 		let mut heights = self.get_heights();
+
+		put_pos.x = puyo_status.position.x;
+		put_pos.y = heights[puyo_status.position.x as usize] as i8;
 
 		let puyo_center_x = puyo_status.position.x as u8;
 		let puyo_center_y = puyo_status.position.y as u8;
@@ -108,15 +116,14 @@ impl Board {
 		}
 	}
 
-	#[inline]
+	/*#[inline]
 	pub unsafe fn put_puyo_1(&mut self, x: u8, puyo: &PuyoKind) {
 		let board = _mm_or_si128(self.0[0], _mm_or_si128(self.0[1], self.0[2]));
 		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
 		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, board);
-
 		let board_filled_count = _popcnt32(board_split_aligned.0[x as usize] as i32);
 		self.set_flag(&x, &(board_filled_count as u8), puyo);
-	}
+	}*/
 
 	///指定したxの高さの場所に上書きします
 	#[inline]
@@ -130,12 +137,21 @@ impl Board {
 	#[inline]
 	pub unsafe fn get_heights(&self) -> [u16; 8] {
 		let mut heights: [u16; 8] = [0; 8];
+
+		let board = self.get_not_empty_board().mask_board_13().0;
+		/*
 		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
 		_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.get_not_empty_board().mask_board_13().0);
-
-		for i in 0..8 {
-			heights[i] = _popcnt32(board_split_aligned.0[i] as i32) as u16;
-		}
+*/
+		//TODO: マクロで展開する
+		heights[0] = _popcnt32(_mm_extract_epi16::<0>(board)) as u16;
+		heights[1] = _popcnt32(_mm_extract_epi16::<1>(board)) as u16;
+		heights[2] = _popcnt32(_mm_extract_epi16::<2>(board)) as u16;
+		heights[3] = _popcnt32(_mm_extract_epi16::<3>(board)) as u16;
+		heights[4] = _popcnt32(_mm_extract_epi16::<4>(board)) as u16;
+		heights[5] = _popcnt32(_mm_extract_epi16::<5>(board)) as u16;
+		heights[6] = _popcnt32(_mm_extract_epi16::<6>(board)) as u16;
+		heights[7] = _popcnt32(_mm_extract_epi16::<7>(board)) as u16;
 
 		heights
 	}
@@ -192,6 +208,7 @@ impl Board {
 		self.0[0] = _mm_load_si128(v1.0.as_ptr() as *const __m128i);
 		self.0[1] = _mm_load_si128(v2.0.as_ptr() as *const __m128i);
 		self.0[2] = _mm_load_si128(v3.0.as_ptr() as *const __m128i);
+		//TODO: これだけのためにloadしてね?
 		let mut heights = self.get_heights();
 
 
@@ -424,40 +441,96 @@ impl Board {
 		return (10 * erased_puyo_count * bonus) as u32;
 	}
 	#[inline]
-	unsafe fn pop(board: &u16, mask: &u16) -> u32 {
+	unsafe fn pop(board: &i16, mask: &i16) -> u32 {
 		_pext_u32((*board) as u32, (*mask) as u32)
 	}
 	///落ちる量
 	#[inline]
 	pub unsafe fn drop_after_erased(&mut self, erased: &BoardBit) -> u8 {
+		/*	let mut drop_count: u8 = 0;
+			let mut mask_split_aligned: SplitBoard = SplitBoard([0; 8]);
+			let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
+	
+			_mm_store_si128(mask_split_aligned.0.as_mut_ptr() as *mut __m128i, erased.0);
+	
+			let dont_drop_mask = 0b1100000000000000;
+	
+	
+			for i in 0..3 {
+				_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.0[i]);
+	
+				for split_index in 0..mask_split_aligned.0.len() {
+					if drop_count < _popcnt32(mask_split_aligned.0[split_index] as i32) as u8 {
+						drop_count = _popcnt32(mask_split_aligned.0[split_index] as i32) as u8;
+					}
+	
+					let dont_drop = board_split_aligned.0[split_index] & dont_drop_mask;
+					let test_column = board_split_aligned.0[split_index] & !dont_drop_mask;
+					board_split_aligned.0[split_index] = Self::pop(&(test_column as i16), &(!(mask_split_aligned.0[split_index] as i16))) as u16;
+					board_split_aligned.0[split_index] |= dont_drop;
+				}
+	
+				self.0[i] = _mm_load_si128(board_split_aligned.0.as_ptr() as *const __m128i);
+			}
+	
+			return drop_count;*/
+
+
 		let mut drop_count: u8 = 0;
-		let mut mask_split_aligned: SplitBoard = SplitBoard([0; 8]);
-		let mut board_split_aligned: SplitBoard = SplitBoard([0; 8]);
 
-		_mm_store_si128(mask_split_aligned.0.as_mut_ptr() as *mut __m128i, erased.0);
-
-		let dont_drop_mask = 0b1100000000000000;
-
+		let column_mask1 = _mm_extract_epi16::<1>(erased.0) as i16;
+		let column_mask2 = _mm_extract_epi16::<2>(erased.0) as i16;
+		let column_mask3 = _mm_extract_epi16::<3>(erased.0) as i16;
+		let column_mask4 = _mm_extract_epi16::<4>(erased.0) as i16;
+		let column_mask5 = _mm_extract_epi16::<5>(erased.0) as i16;
+		let column_mask6 = _mm_extract_epi16::<6>(erased.0) as i16;
 
 		for i in 0..3 {
-			_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.0[i]);
+			//	_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.0[i]);
 
-			for split_index in 0..mask_split_aligned.0.len() {
-				if drop_count < _popcnt32(mask_split_aligned.0[split_index] as i32) as u8 {
-					drop_count = _popcnt32(mask_split_aligned.0[split_index] as i32) as u8;
-				}
+			let column0 = _mm_extract_epi16::<0>(self.0[i]) as i16;
+			let column7 = _mm_extract_epi16::<7>(self.0[i]) as i16;
 
-				let dont_drop = board_split_aligned.0[split_index] & dont_drop_mask;
-				let test_column = board_split_aligned.0[split_index] & !dont_drop_mask;
-				board_split_aligned.0[split_index] = Self::pop(&test_column, &!(mask_split_aligned.0[split_index])) as u16;
-				board_split_aligned.0[split_index] |= dont_drop;
-			}
+			let mut column1 = _mm_extract_epi16::<1>(self.0[i]) as i16;
+			Self::pop_column(&mut column1, &column_mask1, &mut drop_count);
 
-			self.0[i] = _mm_load_si128(board_split_aligned.0.as_ptr() as *const __m128i);
+			let mut column2 = _mm_extract_epi16::<2>(self.0[i]) as i16;
+			Self::pop_column(&mut column2, &column_mask2, &mut drop_count);
+
+			let mut column3 = _mm_extract_epi16::<3>(self.0[i]) as i16;
+			Self::pop_column(&mut column3, &column_mask3, &mut drop_count);
+
+			let mut column4 = _mm_extract_epi16::<4>(self.0[i]) as i16;
+			Self::pop_column(&mut column4, &column_mask4, &mut drop_count);
+
+			let mut column5 = _mm_extract_epi16::<5>(self.0[i]) as i16;
+			Self::pop_column(&mut column5, &column_mask5, &mut drop_count);
+
+			let mut column6 = _mm_extract_epi16::<6>(self.0[i]) as i16;
+			Self::pop_column(&mut column6, &column_mask6, &mut drop_count);
+
+			self.0[i] = _mm_set_epi16(column7, column6, column5, column4, column3, column2, column1, column0);
 		}
 
 		drop_count
 	}
+
+	#[inline]
+	unsafe fn pop_column(column: &mut i16, mask: &i16, drop_count: &mut u8) {
+		let dont_drop_mask = 0b1100000000000000u16 as i16;
+
+		let masked_column = *column & dont_drop_mask;
+		let mut extracted_column = *column & !dont_drop_mask;
+
+		extracted_column = Self::pop(&extracted_column, &(!*mask)) as i16;
+		*column = extracted_column | masked_column;
+
+		let popcnt = _popcnt32(*mask as i32);
+		if *drop_count < popcnt as u8 {
+			*drop_count = popcnt as u8;
+		}
+	}
+
 	#[inline]
 	fn get_color_bonus(color_count: &u32) -> u32 {
 		match color_count {
