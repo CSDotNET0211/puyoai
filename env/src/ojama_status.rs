@@ -132,7 +132,8 @@ impl OjamaStatus {
 
 		ojama_size as usize
 	}
-	//use_garbage 関数 offsetとちょっと似てるかもね receive_timeが0だったら使うよ
+	///use_garbage 関数 offsetとちょっと似てるかもね receive_timeが0だったら使うよ
+	//TODO: 色々怪しい
 	#[inline]
 	#[allow(unused_assignments)]
 	pub unsafe fn use_ojama(&mut self, mut use_size: usize) {
@@ -144,7 +145,7 @@ impl OjamaStatus {
 				use_size = 0;
 			} else {
 				values[0] = 0;
-				use_size -= values[0] as usize;
+			//	use_size -= values[0] as usize;
 			}
 		}
 
@@ -155,7 +156,7 @@ impl OjamaStatus {
 				use_size = 0;
 			} else {
 				values[2] = 0;
-				use_size -= values[0] as usize;
+				//use_size -= values[2] as usize;
 			}
 		}
 

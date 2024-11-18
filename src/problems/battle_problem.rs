@@ -17,7 +17,7 @@ impl BattleProblem {
 
 impl NeuroProblem for BattleProblem {
 	fn get_inputs_num(&self) -> usize {
-		30
+		31
 	}
 
 	fn get_outputs_num(&self) -> usize {

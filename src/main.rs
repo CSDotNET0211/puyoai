@@ -228,7 +228,7 @@ unsafe fn ppc() {
 	let mut ppc_opponent_status_clone = ppc_opponent_status.clone();
 	ppc_player.lock().unwrap().connect();
 	ppc_opponent.lock().unwrap().connect();
-	
+
 	let mut ppc_opponent_clone = ppc_opponent.clone();
 	let mut timer = Instant::now();
 	let interval = Duration::from_secs(1);
@@ -253,7 +253,7 @@ unsafe fn ppc() {
 			let mut ppc_player = ppc_player.lock().unwrap();
 
 			ppc_player.update(ppc_opponent_clone.clone());
-			
+
 			if //ppc_player1.field.lock().unwrap().current.is_some() &&
 			ppc_player.is_movable &&
 				ppc_player.inputs.len() == 0 {

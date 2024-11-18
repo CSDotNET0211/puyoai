@@ -126,7 +126,7 @@ impl<E: Evaluator> BattleEnv<E> {
 		//	let time = think_start.elapsed().as_millis();
 			//println!("{}", format!("{:04}", time));
 			//dbg!(think_start.elapsed().as_millis());
-			//dbg!(&ai.debug);
+		//	dbg!(&ai.debug);
 
 			*player_inputs = ai.best_move.as_ref().unwrap().path.to_vec().into();
 		} else {

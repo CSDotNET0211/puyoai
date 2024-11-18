@@ -43,6 +43,7 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 				waste_chain_link: &usize,
 				one_side_chain_count: &u8,
 				instant_attack_count: &u8,
+				attack_value: &usize,
 	) -> f32 {
 		unsafe {
 			if !sim_board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
@@ -93,7 +94,9 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 					nn_highest_template_score = score;
 				}
 			}
-
+			debug.link2_count = nn_link2 as usize;
+			debug.link3_count = nn_link3 as usize;
+			debug.potential_chain_count = potential.chain as usize;
 
 			//全消し状態はスコアとして
 			//相殺した後のお邪魔と送る火力+2
@@ -134,7 +137,8 @@ impl<T: NeuralNetwork> Evaluator for NNEvaluator<T> {
 				potential.near_empty_count as f32,//発火点周辺の空白マス数
 				potential.ignite_pos.x as f32,//発火点のx座標
 				potential.ignite_pos.y as f32,//発火点のy座標
-				*instant_attack_count as f32
+				*instant_attack_count as f32,
+				*attack_value as f32
 			]);
 
 			result[0]

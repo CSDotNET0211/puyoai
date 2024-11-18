@@ -171,7 +171,7 @@ impl Board {
 		}*/
 
 	#[inline]
-	pub unsafe fn try_put_ojama(&mut self, ojama: &mut OjamaStatus/*, rng: &mut ThreadRng*/) {
+	pub unsafe fn try_put_ojama(&mut self, ojama: &mut OjamaStatus) {
 		let mut ojama_to_receive = ojama.get_receivable_ojama_size();
 
 		if ojama_to_receive > MAX_OJAMA_RECEIVE_COUNT {
@@ -486,7 +486,6 @@ impl Board {
 		let column_mask6 = _mm_extract_epi16::<6>(erased.0) as i16;
 
 		for i in 0..3 {
-			//	_mm_store_si128(board_split_aligned.0.as_mut_ptr() as *mut __m128i, self.0[i]);
 
 			let column0 = _mm_extract_epi16::<0>(self.0[i]) as i16;
 			let column7 = _mm_extract_epi16::<7>(self.0[i]) as i16;

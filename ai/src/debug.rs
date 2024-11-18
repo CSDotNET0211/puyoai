@@ -10,6 +10,7 @@ use crate::potential::Potential;
 pub struct Debug {
 	pub link2_count: usize,
 	pub link3_count: usize,
+	pub potential_chain_count:usize,
 	pub near_empty_count: usize,
 	pub ignite_pos: Vector2,
 	pub waste_chain_link: usize,
@@ -23,6 +24,7 @@ impl Debug {
 		Debug {
 			link2_count: 0,
 			link3_count: 0,
+			potential_chain_count:0,
 			ignite_pos: Vector2::default(),
 			near_empty_count: 0,
 			potential_added_count: 0,

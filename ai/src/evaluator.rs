@@ -27,6 +27,7 @@ pub trait Evaluator {
 				waste_chain_link: &usize,
 				one_side_chain_count: &u8,
 				instant_attack_count: &u8,
+				attack_value: &usize,
 	) -> f32;
 	fn clone(&self) -> Self;
 }

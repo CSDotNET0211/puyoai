@@ -65,10 +65,10 @@ impl<E: Evaluator> AI<E> {
 
 		let mut rng = thread_rng();
 
-		let instant_attack_count = AI::<NNEvaluator<MultilayeredNetwork>>::get_instant_attack(&board,&ojama_rate);
+		let instant_attack_count = AI::<NNEvaluator<MultilayeredNetwork>>::get_instant_attack(&board, &ojama_rate);
 
 
-		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate, &mut rng, opponent_status, 0,&instant_attack_count);
+		self.search_internal(&board, &current, &next, ojama, center_puyo, movable_puyo, &Vec::new(), 0, 0, all_cleared, ojama_rate, &mut rng, opponent_status, 0, &instant_attack_count, 0);
 
 
 		if let Some(pos) = self.best_move.as_mut().unwrap().path.iter().position(|&x| x == Drop) {
@@ -156,7 +156,7 @@ impl<E: Evaluator> AI<E> {
 	}
 	#[inline]
 	///仮想落下で、
-	pub unsafe fn get_instant_attack(board: &Board,ojama_rate:&usize) -> u8 {
+	pub unsafe fn get_instant_attack(board: &Board, ojama_rate: &usize) -> u8 {
 		let mut instant_attack_count = 0;
 
 		let mut eval = |board: &Board| {
@@ -232,7 +232,8 @@ impl<E: Evaluator> AI<E> {
 							  rng: &mut ThreadRng,
 							  opponent_status: &OpponentStatus,
 							  mut waste_chain_link: usize,
-							  instant_attack_count:&u8
+							  instant_attack_count: &u8,
+							  mut attacked_value: usize,
 	) {
 		let mut places: HashMap<u16, (u8, PuyoStatus)> = HashMap::new();
 		let mut hash_position = HashMap::new();
@@ -252,7 +253,8 @@ impl<E: Evaluator> AI<E> {
 
 			//	let mut waste_chain_link = 0;
 
-			let mut new_score = score;
+			//let mut new_score = score;
+			let mut new_score = 0;
 			let mut chain = 0u8;
 			let mut chain_one_side = 0u8;
 			let mut cleared_pos_flag = 0;
@@ -303,6 +305,17 @@ impl<E: Evaluator> AI<E> {
 				new_score += temp_score as usize;
 			}
 
+
+			let all_ojama_size = ojama_clone.get_all_ojama_size();
+
+			let temp_attack = new_score / ojama_rate;
+			let left_attack = temp_attack.saturating_sub(all_ojama_size);
+			attacked_value += left_attack;
+
+			ojama_clone.use_ojama(temp_attack - left_attack);
+
+			new_score += score;
+
 			if !sim_board.is_empty_cell(DEAD_POSITION.x as i16, DEAD_POSITION.y as i16) {
 				continue;
 			}
@@ -339,7 +352,7 @@ impl<E: Evaluator> AI<E> {
 				let new_movable_puyo = new_next.pop().unwrap();
 
 
-				self.search_internal(&sim_board, &new_current, &new_next, &ojama_clone, new_center_puyo, new_movable_puyo, &new_movements, 0, new_score, all_cleared, ojama_rate, rng, opponent_status, waste_chain_link,instant_attack_count);
+				self.search_internal(&sim_board, &new_current, &new_next, &ojama_clone, new_center_puyo, new_movable_puyo, &new_movements, elapsed_frame, new_score, all_cleared, ojama_rate, rng, opponent_status, waste_chain_link, instant_attack_count, attacked_value);
 			} else {
 				let mut potential = Potential::default();
 				AI::<NNEvaluator<MultilayeredNetwork>>::get_potential_chain(&put_board, &put_board.get_heights(), &chain, &cleared_pos_flag, 0, &mut potential, 0);
@@ -370,7 +383,8 @@ impl<E: Evaluator> AI<E> {
 				debug.one_side_chain_count = chain_one_side as usize;
 				debug.potential_added_count = potential.added_count as usize;
 
-				let eval = self.evaluator.evaluate(&put_board, &sim_board, &potential, &chain, &new_score, &(elapsed_frame as u32), &mut debug, &ojama_clone, ojama_rate, opponent_status, &waste_chain_link, &chain_one_side,instant_attack_count);
+				let eval = self.evaluator.evaluate(&put_board, &sim_board, &potential, &chain, &new_score, &(elapsed_frame as u32), &mut debug, &ojama_clone, ojama_rate, opponent_status, &waste_chain_link, &chain_one_side, instant_attack_count, &attacked_value);
+
 
 				//highest_evalよりも評価が高かったら、計算したpath、
 				if self.best_move == None || self.best_move.as_ref().unwrap().eval < eval {
